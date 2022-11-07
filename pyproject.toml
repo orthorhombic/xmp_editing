@@ -1,0 +1,46 @@
+[tool.poetry]
+name = "xmp_editing"
+version = "0.0.0"
+description = "xmp_editing"
+authors = ["Jason Krizan <34923517+orthorhombic@users.noreply.github.com>"]
+license = "None"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.10.4"
+matplotlib = "^3.5.1"
+pandas = "^1.4.4"
+seaborn = "^0.12.0"
+numpy = "^1.23.3"
+slpp = {git = "https://github.com/SirAnthony/slpp"}
+logzero = "^1.7.0"
+pyexiv2 = "^2.8.1"
+
+[tool.poetry.dev-dependencies]
+mypy = "^0.940"
+flake8 = "^4.0.1"
+black = "22.1.0"
+flake8-bandit = "^3.0.0"
+flake8-bugbear = "^22.3.23"
+flake8-docstrings = "^1.6.0"
+flake8-rst-docstrings = "^0.2.5"
+pep8-naming = "^0.12.1"
+darglint = "^1.8.1"
+reorder-python-imports = "^3.0.1"
+pyupgrade = "^2.31.1"
+poetryup = "^0.5.6"
+bandit = "1.7.4"
+jupyter = "^1.0.0"
+ipykernel = "^6.12.1"
+
+[tool.mypy]
+strict = true
+warn_unreachable = true
+pretty = true
+show_column_numbers = true
+show_error_codes = true
+show_error_context = true
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
