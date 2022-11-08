@@ -32,6 +32,6 @@ LEFT JOIN AgHarvestedExifMetadata ON AgHarvestedExifMetadata.image = Adobe_image
 LEFT JOIN AgInternedExifCameraModel ON AgInternedExifCameraModel.id_local = AgHarvestedExifMetadata.cameraModelRef
 LEFT JOIN AgInternedExifLens ON AgInternedExifLens.id_local = AgHarvestedExifMetadata.lensRef
 -- LEFT JOIN ModCount ON ModCount.image = Adobe_images.id_local -- remove this to avoid depedency on ModCount view
-LEFT JOIN Adobe_AdditionalMetadata on Adobe_images.id_local = Adobe_AdditionalMetadata.image 
-LEFT JOIN Adobe_imageDevelopSettings on Adobe_images.id_local = Adobe_imageDevelopSettings.image 
+LEFT JOIN Adobe_AdditionalMetadata on Adobe_images.id_local = Adobe_AdditionalMetadata.image
+LEFT JOIN Adobe_imageDevelopSettings on Adobe_images.id_local = Adobe_imageDevelopSettings.image
 where copyName is Null -- to select only the first copy and avoid xml duplicates

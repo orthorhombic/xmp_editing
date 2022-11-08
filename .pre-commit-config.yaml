@@ -1,0 +1,52 @@
+repos:
+  - repo: local
+    hooks:
+      - id: black
+        name: black
+        entry: black
+        language: system
+        types:
+          - python
+        require_serial: true
+      - id: autoflake
+        name: autoflake
+        entry: autoflake
+        language: system
+        types:
+          - python
+        require_serial: true
+      - id: autopep8
+        name: autopep8
+        entry: autopep8
+        language: system
+        types:
+          - python
+        require_serial: true
+  - repo: https://github.com/asottile/pyupgrade
+    rev: v3.2.0
+    hooks:
+    - id: pyupgrade
+      args: [--py37-plus]
+  - repo: https://github.com/asottile/reorder_python_imports
+    rev: v3.9.0
+    hooks:
+    - id: reorder-python-imports
+      args: [--application-directories=./]
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.1.0
+    hooks:
+      - id: debug-statements
+      - id: check-yaml
+      - id: check-toml
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: check-added-large-files
+  - repo: https://github.com/pre-commit/mirrors-prettier
+    rev: v2.6.0
+    hooks:
+      - id: prettier
+  - repo: https://github.com/python-poetry/poetry
+    rev: '1.2.2'  # add version here
+    hooks:
+      - id: poetry-check
+      # - id: poetry-lock

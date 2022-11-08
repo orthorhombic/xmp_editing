@@ -1,116 +1,17 @@
-from logzero import logger
+import importlib
 
+import pyexiv2
+from logzero import logger
 from slpp import slpp as lua
 
-
 # these keys and start/stop blocks are extracted from a working xmp file for testing
-start="""
+start = """
 <x:xmpmeta xmlns:x="adobe:ns:meta/" x:xmptk="Adobe XMP Core 5.5-c002 1.148022, 2012/07/15-18:06:45        ">
  <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
   <rdf:Description rdf:about=""
     xmlns:tiff="http://ns.adobe.com/tiff/1.0/"
     xmlns:crs="http://ns.adobe.com/camera-raw-settings/1.0/"
 """
-
-
-
-crs_keys=[
-"Temperature",
-"Tint",
-"Saturation",
-"Sharpness",
-"LuminanceSmoothing",
-"ColorNoiseReduction",
-"VignetteAmount",
-"ShadowTint",
-"RedHue",
-"RedSaturation",
-"GreenHue",
-"GreenSaturation",
-"BlueHue",
-"BlueSaturation",
-"Vibrance",
-"HueAdjustmentRed",
-"HueAdjustmentOrange",
-"HueAdjustmentYellow",
-"HueAdjustmentGreen",
-"HueAdjustmentAqua",
-"HueAdjustmentBlue",
-"HueAdjustmentPurple",
-"HueAdjustmentMagenta",
-"SaturationAdjustmentRed",
-"SaturationAdjustmentOrange",
-"SaturationAdjustmentYellow",
-"SaturationAdjustmentGreen",
-"SaturationAdjustmentAqua",
-"SaturationAdjustmentBlue",
-"SaturationAdjustmentPurple",
-"SaturationAdjustmentMagenta",
-"LuminanceAdjustmentRed",
-"LuminanceAdjustmentOrange",
-"LuminanceAdjustmentYellow",
-"LuminanceAdjustmentGreen",
-"LuminanceAdjustmentAqua",
-"LuminanceAdjustmentBlue",
-"LuminanceAdjustmentPurple",
-"LuminanceAdjustmentMagenta",
-"SplitToningShadowHue",
-"SplitToningShadowSaturation",
-"SplitToningHighlightHue",
-"SplitToningHighlightSaturation",
-"SplitToningBalance",
-"ParametricShadows",
-"ParametricDarks",
-"ParametricLights",
-"ParametricHighlights",
-"ParametricShadowSplit",
-"ParametricMidtoneSplit",
-"ParametricHighlightSplit",
-"SharpenRadius",
-"SharpenDetail",
-"SharpenEdgeMasking",
-"PostCropVignetteAmount",
-"GrainAmount",
-"ColorNoiseReductionDetail",
-"ColorNoiseReductionSmoothness",
-"LensProfileEnable",
-"LensManualDistortionAmount",
-"PerspectiveVertical",
-"PerspectiveHorizontal",
-"PerspectiveRotate",
-"PerspectiveScale",
-"PerspectiveAspect",
-"PerspectiveUpright",
-"AutoLateralCA",
-"Exposure2012",
-"Contrast2012",
-"Highlights2012",
-"Shadows2012",
-"Whites2012",
-"Blacks2012",
-"Clarity2012",
-"DefringePurpleAmount",
-"DefringePurpleHueLo",
-"DefringePurpleHueHi",
-"DefringeGreenAmount",
-"DefringeGreenHueLo",
-"DefringeGreenHueHi",
-"ConvertToGrayscale",
-"ToneCurveName",
-"ToneCurveName2012",
-"CameraProfile",
-"CameraProfileDigest",
-"LensProfileSetup",
-"HasSettings",
-"CropTop",
-"CropLeft",
-"CropBottom",
-"CropRight",
-"CropAngle",
-"CropConstrainToWarp",
-"HasCrop",
-"AlreadyApplied",
-]
 
 
 end = """>
@@ -248,27 +149,24 @@ Whites2012 = 0 }
 """
 
 
-
-import importlib
-
 # with importlib.resources.files("tags").joinpath("crs_tags.txt").open('r', encoding="utf8") as f:
-with importlib.resources.files("tags").joinpath("tags_from_darktable.txt").open('r', encoding="utf8") as f:
-    tags=f.read().splitlines() 
+with importlib.resources.files("tags").joinpath("tags_from_darktable.txt").open(
+    "r", encoding="utf8"
+) as f:
+    tags = f.read().splitlines()
 
 
-
-
-if test[0:4]=="s = ":
-    data=lua.decode(test[4:])
+if test[0:4] == "s = ":
+    data = lua.decode(test[4:])
 else:
     logger.critical("unexpected start to lua string")
-    raise(BaseException("unexpected start to lua string"))
+    raise (BaseException("unexpected start to lua string"))
 
 
 # tagintersect=set(tags).intersection(set(data.keys()))
 
-process_ver=6.7
-crs_items=[]
+process_ver = 6.7
+crs_items = []
 crs_items.append(f'   crs:ProcessVersion="{process_ver}"\n')
 
 # the crs keys need to be in order, therefore we iterate over that list
@@ -276,22 +174,22 @@ crs_items.append(f'   crs:ProcessVersion="{process_ver}"\n')
 for key in tags:
     # val=data[key]
     try:
-        if key=="HasCrop" and ("CropTop" in data.keys()):
+        if key == "HasCrop" and ("CropTop" in data.keys()):
             logger.info("crop enabled")
             crs_items.append('   crs:HasCrop="True"\n')
             continue
-        val=data[key]
+        val = data[key]
     except KeyError:
         logger.debug(f"missing {key}")
         continue
 
-# for key,val in data.items():
+    # for key,val in data.items():
     # print(key,val,type(key),type(val))
-    if isinstance(val,int) or isinstance(val,str) or isinstance(val,float):
-        temp_string=f'   crs:{key}="{val}"\n'
+    if isinstance(val, int) or isinstance(val, str) or isinstance(val, float):
+        temp_string = f'   crs:{key}="{val}"\n'
     else:
         logger.warning(f"not sure how to handle {key}")
-        temp_string=f'   crs:{key}="{val}"\n'
+        temp_string = f'   crs:{key}="{val}"\n'
         # temp_string=f'   crs:{key}={val}\n'
 
     crs_items.append(temp_string)
@@ -300,19 +198,16 @@ for key in tags:
 #     crs_items.append('   crs:HasCrop="True"')
 
 
-print(start+"".join(crs_items)+end)
+print(start + "".join(crs_items) + end)
 
 
-import pyexiv2
-
-tagintersect=set(tags).intersection(set(data.keys()))
-intersect_dict={f"Xmp.crs.{k}":data[k] for k in tagintersect}
+tagintersect = set(tags).intersection(set(data.keys()))
+intersect_dict = {f"Xmp.crs.{k}": data[k] for k in tagintersect}
 if "Xmp.crs.CropTop" in intersect_dict.keys():
-    intersect_dict["Xmp.crs.HasCrop"]="True"
+    intersect_dict["Xmp.crs.HasCrop"] = "True"
 
 
-
-img = pyexiv2.Image(r'xmp/london.xmp')
+img = pyexiv2.Image(r"xmp/london.xmp")
 exif = img.read_exif()
 iptc = img.read_iptc()
 xmp = img.read_xmp()
@@ -327,23 +222,20 @@ for key in tags:
             logger.info("crop enabled")
             crs_items.append('   crs:HasCrop="True"\n')
             continue
-        val=data[key]
+        val = data[key]
     except KeyError:
         logger.debug(f"missing {key}")
         continue
 
-# for key,val in data.items():
+    # for key,val in data.items():
     # print(key,val,type(key),type(val))
-    if isinstance(val,int) or isinstance(val,str) or isinstance(val,float):
-        temp_string=f'   crs:{key}="{val}"\n'
+    if isinstance(val, int) or isinstance(val, str) or isinstance(val, float):
+        temp_string = f'   crs:{key}="{val}"\n'
     else:
         logger.warning(f"not sure how to handle {key}")
-        temp_string=f'   crs:{key}="{val}"\n'
+        temp_string = f'   crs:{key}="{val}"\n'
         # temp_string=f'   crs:{key}={val}\n'
 
     crs_items.append(temp_string)
 
 img.close()
-
-
-
