@@ -30,7 +30,6 @@ Remove `<xmp:Label>None</xmp:Label>` because it evaluates to a purple label.
 
 ## Immediate next steps:
 
-- clean up extract xmp
 - add ability to create an xmp file from scratch if none exists - look at exiftool
 - convert to using `with pyexiv2.Image(...`)
 - look at pyexiftool https://github.com/sylikc/pyexiftool
@@ -46,4 +45,9 @@ Remove `<xmp:Label>None</xmp:Label>` because it evaluates to a purple label.
 
 ```bash
 pre-commit run --all-files
+
+
+exiftool -xmp -b -w xmp fileB.dng
+exiftool -tagsfromfile file.dng -XMP:all -tagsfromfile file.xmp -XMP:all -tagsfromfile file.dng.xmp -XMP:all -o file.multiple.xmp
+
 ```
