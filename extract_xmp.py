@@ -75,6 +75,22 @@ def parse_lightroom_processtext(lightroom_processtext:str, tags:list[str], proce
     if "Xmp.crs.CropTop" in intersect_dict.keys():
         intersect_dict["Xmp.crs.HasCrop"] = "True"
 
+    if "Xmp.crs.ToneCurvePV2012" in intersect_dict.keys():
+        # based on the darktable code, it looks like this is expected to be a list of tuples/lists
+        temp_list=intersect_dict["Xmp.crs.ToneCurvePV2012"]
+        if len(temp_list)%2==1:
+            raise ValueError("Unexpected length of ToneCurvePV2012")
+
+        new_list=[]
+        for i in range(len(temp_list)//2):
+            # pyexiv2 uses ", " as a separator for multiple values.
+            # So it might automatically split the string you want to write.
+            # https://github.com/LeoHsiao1/pyexiv2/blob/master/docs/Tutorial.md
+            new_list.append(f"{temp_list[2*i]},{temp_list[2*i+1]}")
+
+        intersect_dict["Xmp.crs.ToneCurvePV2012"] = new_list
+
+
     return intersect_dict
 
 
