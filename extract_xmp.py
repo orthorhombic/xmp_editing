@@ -10,6 +10,10 @@ import pathlib
 import yaml
 import shutil
 
+# NOTE: After import into darktable, the metadata "refresh EXIF" button needs to be pressed
+# This will sync the database with the new darktable xmp files
+
+pyexiv2.set_log_level(4)
 logger.setLevel(level="INFO")
 #load settings
 config = importlib.resources.files("untracked").joinpath("config.yml")
@@ -97,167 +101,131 @@ def extend_xmp(base:pyexiv2.core.Image,xmp_file:pathlib.PosixPath):
 
     return base
 
-# TODO:
-# Read XMP from database
-# convert process text to XMP
-# Read Sidecar XMP
-# read file XMP
-# stack all XMP data file, sidecar, db_xmp, then processtext
 
-i=3
-temp_path=df.loc[i,"BaseName"]+"."+df.loc[i,"FileType"]
-lr_xmp_path=df.loc[i,"BaseName"]+".xmp"
-darktable_xmp_path=df.loc[i,"BaseName"]+"."+df.loc[i,"FileType"]+".xmp"
-lightroom_processtext=df.loc[i,"processtext"]
-process_ver=df.loc[i,"processversion"]
-db_xmp=df.loc[i,"xmp"]
+# i=3
+# temp_path=df.loc[i,"BaseName"]+"."+df.loc[i,"FileType"]
+# lr_xmp_path=df.loc[i,"BaseName"]+".xmp"
+# darktable_xmp_path=df.loc[i,"BaseName"]+"."+df.loc[i,"FileType"]+".xmp"
+# lightroom_processtext=df.loc[i,"processtext"]
+# process_ver=df.loc[i,"processversion"]
+# db_xmp=df.loc[i,"xmp"]
 
-# combine path
-filepath=pathlib.Path(root_path,temp_path)
-filepath_lr_xmp=pathlib.Path(root_path,lr_xmp_path)
-filepath_darktable_xmp=pathlib.Path(root_path,darktable_xmp_path)
+# data_series=df.loc[i,:]
 
 
+def process_file(data_series):
 
-temp_files={
-    "orig":pathlib.Path(temp_dir,"orig.xmp"),
-    "db":pathlib.Path(temp_dir,"db.xmp"),
-    "sidecar_lr":pathlib.Path(temp_dir,"sidecar.xmp"),
-    "sidecar_darktable":pathlib.Path(temp_dir,"sidecar.ext.xmp"),
-}
+    temp_path=data_series.loc["BaseName"]+"."+data_series.loc["FileType"]
+    lr_xmp_path=data_series.loc["BaseName"]+".xmp"
+    darktable_xmp_path=data_series.loc["BaseName"]+"."+data_series.loc["FileType"]+".xmp"
+    lightroom_processtext=data_series.loc["processtext"]
+    process_ver=data_series.loc["processversion"]
+    db_xmp=data_series.loc["xmp"]
 
+    # combine path
+    filepath=pathlib.Path(root_path,temp_path)
+    filepath_lr_xmp=pathlib.Path(root_path,lr_xmp_path)
+    filepath_darktable_xmp=pathlib.Path(root_path,darktable_xmp_path)
 
-# Create temp files from extracted data
-
-if filepath.is_file():
-    copy_xmp_temp(filepath, temp_files["orig"])
-else:
-    raise FileNotFoundError(f"Not found: {filepath}")
-
-
-# write database XMP to temp
-with open(temp_files["db"], 'w') as f:
-    f.write(db_xmp)
-
-# try sidecar files
-# # TODO: case insensitive implementation
-copy_xmp_temp(filepath_lr_xmp, temp_files["sidecar_lr"])
-copy_xmp_temp(filepath_darktable_xmp, temp_files["sidecar_darktable"])
-
-# prepare data from database for stacking
-intersect_dict=parse_lightroom_processtext(lightroom_processtext=lightroom_processtext, tags=tags, process_ver=process_ver)
-
-
-# stack data
-new_xmp = pyexiv2.Image(temp_files["orig"].as_posix())
-
-
-
-new_xmp=extend_xmp(new_xmp,temp_files["db"])
-if temp_files["sidecar_lr"].is_file():
-    new_xmp=extend_xmp(new_xmp,temp_files["sidecar_lr"])
-if temp_files["sidecar_darktable"].is_file():
-    new_xmp=extend_xmp(new_xmp,temp_files["sidecar_darktable"])
-
-
-
-new_xmp.modify_xmp(intersect_dict)
-
-
-
-# copy data back to LR format file
-
-
-if filepath_lr_xmp.is_file():
-    # update
-    with pyexiv2.Image(filepath_lr_xmp.as_posix()) as img:
-        img.modify_xmp(new_xmp.read_xmp())
-
-else:
-    # copy
-    shutil.copy(temp_files["orig"], filepath_lr_xmp)
-
-
-new_xmp.close()
-
-
-
-
-# paths: original file xmp copy, database xmp, sidecar file.xmp, sidecar file.ext.xmp, 
-# create files
-# stack data
-# copy back
-# delete files
-
-
-
-
-
-
-# TODO: /dev/shm is a ramdisk. Create files here for ephemeral transformations that require writing to disk
-# generated_xmp=parse_lightroom_processtext_to_xmp(lightroom_processtext=lightroom_processtext, tags=tags, process_ver=process_ver)
-# print(generated_xmp)
-
-# Read XMP from database
-# convert process text to XMP
-# Read Sidecar XMP
-# read file XMP
-# stack all XMP data file, sidecar, db_xmp, then processtext
-
-
-
-
-
-
-
-
-
-# Cleanup temp files:
-for key,val in temp_files.items():
-    try:
-        val.unlink()
-    except FileNotFoundError:
-        logger.debug(f"file not found for cleanup: {key}, {val}")
-        pass
-
-
-#need check to confirm there is an exif block with resolution in it
-# if HasCrop:
-#     needs:
-#         ImageWidth
-#         ImageLength
-#         Orientation
-
-def process_file(filepath:str,database_info):
-    raise NotImplementedError("In Progress")
-    #load the file first, abort if it isn't there
-    try:
-        img_xmp = load_file(filepath)
-    except BaseException:
-        logger.warning(f"File {filepath} not found")
+    #check the file first, abort if it isn't there
+    if not filepath.is_file():
+        logger.info(f"File {filepath} not found")
+        return
         
 
-    # keep going and load xmp file info if it's there
-    sidecar_files=[filepath.ext.xmp, filepath.xmp]
 
-    sidecar_xmp=""
-    for sidecar_file in sidecar_files:
+    # paths: original file xmp copy, database xmp, sidecar file.xmp, sidecar file.ext.xmp, 
+    temp_files={
+        "orig":pathlib.Path(temp_dir,"orig.xmp"),
+        "db":pathlib.Path(temp_dir,"db.xmp"),
+        "sidecar_lr":pathlib.Path(temp_dir,"sidecar.xmp"),
+        "sidecar_darktable":pathlib.Path(temp_dir,"sidecar.ext.xmp"),
+    }
+
+
+    # Create temp files from extracted data
+
+    if filepath.is_file():
+        copy_xmp_temp(filepath, temp_files["orig"])
+    else:
+        raise FileNotFoundError(f"Not found: {filepath}")
+
+
+    # write database XMP to temp
+    with open(temp_files["db"], 'w') as f:
+        f.write(db_xmp)
+
+    # try sidecar files
+    # # TODO: case insensitive implementation
+    copy_xmp_temp(filepath_lr_xmp, temp_files["sidecar_lr"])
+    copy_xmp_temp(filepath_darktable_xmp, temp_files["sidecar_darktable"])
+
+    # prepare data from database for stacking
+    intersect_dict=parse_lightroom_processtext(lightroom_processtext=lightroom_processtext, tags=tags, process_ver=process_ver)
+
+
+    # stack data
+    # stack all XMP data file, sidecar, db_xmp, then add processtext
+    new_xmp = pyexiv2.Image(temp_files["orig"].as_posix())
+
+
+
+    new_xmp=extend_xmp(new_xmp,temp_files["db"])
+    if temp_files["sidecar_lr"].is_file():
+        new_xmp=extend_xmp(new_xmp,temp_files["sidecar_lr"])
+    if temp_files["sidecar_darktable"].is_file():
+        new_xmp=extend_xmp(new_xmp,temp_files["sidecar_darktable"])
+
+
+
+    new_xmp.modify_xmp(intersect_dict)
+
+
+
+    # copy data back to LR format file
+
+
+    if filepath_lr_xmp.is_file():
+        # update
+        with pyexiv2.Image(filepath_lr_xmp.as_posix()) as img:
+            img.modify_xmp(new_xmp.read_xmp())
+
+    else:
+        # copy
+        shutil.copy(temp_files["orig"], filepath_lr_xmp)
+
+
+    new_xmp.close()
+
+
+    # final file cleanup
+
+    # if the label is none, remove it. This would otherwise get set as a purple label
+    # <xmp:Label>None</xmp:Label>
+
+
+    #need check to confirm there is an exif block with resolution in it
+    # if HasCrop:
+    #     needs:
+    #         ImageWidth
+    #         ImageLength
+    #         Orientation
+
+
+    # delete files
+    # Cleanup temp files:
+    for key,val in temp_files.items():
         try:
-            sidecar_xmp = load_file(filepath)
-            break #break after found item
-        except BaseException:
-            logger.warning(f"File {sidecar_file} not found")
-        
-    #combine xmp into single object/string
+            val.unlink()
+        except FileNotFoundError:
+            logger.debug(f"file not found for cleanup: {key}, {val}")
+            pass
 
-
-    #update existing xmp or write new file
-    # if sidecar_file is path:
-        # open and inject
-    # else:
-        # write new file
-
+for i, data_series in df.iterrows():
+    logger.debug("Index: {i}")
+    process_file(data_series)
 
 
 # clean up temp folder:
-temp_dir.rmdir()
+# temp_dir.rmdir()
+shutil.rmtree(temp_dir)
