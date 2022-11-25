@@ -8,6 +8,7 @@ from logzero import logger
 from slpp import slpp as lua
 import pathlib
 import yaml
+import shutil
 
 logger.setLevel(level="INFO")
 #load settings
@@ -17,6 +18,11 @@ with open(config, 'r') as c_file:
     config_data = yaml.load(c_file, Loader=yaml.SafeLoader)
 
 root_path=pathlib.Path(config_data["root_path"])
+
+# set up temp folder in tmpfs to keep it in memory
+# /dev/shm is a ramdisk. Create files here for ephemeral transformations that require writing to disk
+temp_dir=pathlib.Path("/dev/shm/xmp_editing")
+temp_dir.mkdir(parents=True, exist_ok=True)
 
 # load tags darktable can process:
 # with importlib.resources.files("tags").joinpath("crs_tags.txt").open('r', encoding="utf8") as f:
@@ -50,68 +56,6 @@ cnx.close()
 
 
 
-
-def parse_lightroom_processtext_to_xmp(lightroom_processtext:str, tags:list[str], process_ver:float=6.7):
-    """Process lightroom parameters compatible with darktable. 
-    See https://github.com/darktable-org/darktable/blob/master/src/develop/lightroom.c for info."""
-
-    # these keys and start/stop blocks are extracted from a working xmp file for testing
-    start = """
-    <x:xmpmeta xmlns:x="adobe:ns:meta/" x:xmptk="Adobe XMP Core 5.5-c002 1.148022, 2012/07/15-18:06:45        ">
-    <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
-    <rdf:Description rdf:about=""
-        xmlns:tiff="http://ns.adobe.com/tiff/1.0/"
-        xmlns:crs="http://ns.adobe.com/camera-raw-settings/1.0/"
-    """
-
-
-    end = """>
-    </rdf:Description>
-    </rdf:RDF>
-    </x:xmpmeta>"""
-
-
-    if lightroom_processtext[0:4] == "s = ":
-        data = lua.decode(lightroom_processtext[4:])
-    else:
-        logger.critical("unexpected start to lua string")
-        raise (BaseException("unexpected start to lua string"))
-
-    # extract intersection with what darktable can handle
-    crs_items = []
-    crs_items.append(f'   crs:ProcessVersion="{process_ver}"\n')
-
-    # the crs keys need to be in order, therefore we iterate over that list
-    # the list may not be complete, but it is one that works.
-    for key in tags:
-        # val=data[key]
-        try:
-            if key == "HasCrop" and ("CropTop" in data.keys()):
-                logger.info("crop enabled")
-                crs_items.append('   crs:HasCrop="True"\n')
-                continue
-            val = data[key]
-        except KeyError:
-            logger.debug(f"missing {key}")
-            continue
-
-        # for key,val in data.items():
-        # print(key,val,type(key),type(val))
-        if isinstance(val, int) or isinstance(val, str) or isinstance(val, float):
-            temp_string = f'   crs:{key}="{val}"\n'
-        else:
-            logger.warning(f"not sure how to handle {key}, {val}")
-            temp_string = f'   crs:{key}="{val}"\n'
-            # temp_string=f'   crs:{key}={val}\n'
-
-        crs_items.append(temp_string)
-    
-    generated_xmp=start + "".join(crs_items) + end
-
-
-    return generated_xmp
-
-
 def parse_lightroom_processtext(lightroom_processtext:str, tags:list[str], process_ver:float=6.7):
     """Process lightroom parameters compatible with darktable. 
     See https://github.com/darktable-org/darktable/blob/master/src/develop/lightroom.c for info."""
@@ -131,32 +75,27 @@ def parse_lightroom_processtext(lightroom_processtext:str, tags:list[str], proce
 
 
 
-def create_paths(root_path,relative_path,extension):
-    raise NotImplementedError("In Progress")
-    """From the relative path, root, and extension, create paths to the possible files"""
-    pass
-    relative_path=df.loc[0,"PathFromRoot"]+df.loc[0,"BaseName"]+"."+df.loc[0,"FileType"]
-    
-    # combine path
-    filepath=pathlib.Path(root_path,relative_path)
-
-    
-
-
-
-def load_file():
-    """read file XMP"""
-    raise NotImplementedError("In Progress")
-
-def load_sidecar():
-    """read sidecar XMP"""
-    raise NotImplementedError("In Progress")
-
-    #start with lightroom format: file.xmp
-
-    #also check darktable format: file.ext.xmp
+def copy_xmp_temp(from_file:pathlib.PosixPath, to_file:pathlib.PosixPath):
+    try:
+        # open source file
+        with pyexiv2.Image(from_file.as_posix()) as img:
+            file_raw_xmp = img.read_raw_xmp()
+        # write data to temp
+        with open(to_file, 'w') as f:
+            f.write(file_raw_xmp)
+    except RuntimeError:
+        logger.debug(f"file not found: {from_file}")
 
 
+def extend_xmp(base:pyexiv2.core.Image,xmp_file:pathlib.PosixPath):
+
+    with pyexiv2.Image(xmp_file.as_posix()) as img:
+        file_xmp = img.read_xmp()
+
+    # update xmp data
+    base.modify_xmp(file_xmp)
+
+    return base
 
 # TODO:
 # Read XMP from database
@@ -167,32 +106,90 @@ def load_sidecar():
 
 i=3
 temp_path=df.loc[i,"BaseName"]+"."+df.loc[i,"FileType"]
-lightroom_temp_path=df.loc[i,"BaseName"]+".xmp"
+lr_xmp_path=df.loc[i,"BaseName"]+".xmp"
+darktable_xmp_path=df.loc[i,"BaseName"]+"."+df.loc[i,"FileType"]+".xmp"
 lightroom_processtext=df.loc[i,"processtext"]
 process_ver=df.loc[i,"processversion"]
 db_xmp=df.loc[i,"xmp"]
 
 # combine path
 filepath=pathlib.Path(root_path,temp_path)
-filepath_lr_xmp=pathlib.Path(root_path,lightroom_temp_path)
-
-#open original file
-# with pyexiv2.Image(filepath.as_posix()) as img:
-#     file_xmp = img.read_xmp()
-#     file_exif = img.read_exif()
+filepath_lr_xmp=pathlib.Path(root_path,lr_xmp_path)
+filepath_darktable_xmp=pathlib.Path(root_path,darktable_xmp_path)
 
 
+
+temp_files={
+    "orig":pathlib.Path(temp_dir,"orig.xmp"),
+    "db":pathlib.Path(temp_dir,"db.xmp"),
+    "sidecar_lr":pathlib.Path(temp_dir,"sidecar.xmp"),
+    "sidecar_darktable":pathlib.Path(temp_dir,"sidecar.ext.xmp"),
+}
+
+
+# Create temp files from extracted data
+
+if filepath.is_file():
+    copy_xmp_temp(filepath, temp_files["orig"])
+else:
+    raise FileNotFoundError(f"Not found: {filepath}")
+
+
+# write database XMP to temp
+with open(temp_files["db"], 'w') as f:
+    f.write(db_xmp)
+
+# try sidecar files
+# # TODO: case insensitive implementation
+copy_xmp_temp(filepath_lr_xmp, temp_files["sidecar_lr"])
+copy_xmp_temp(filepath_darktable_xmp, temp_files["sidecar_darktable"])
+
+# prepare data from database for stacking
 intersect_dict=parse_lightroom_processtext(lightroom_processtext=lightroom_processtext, tags=tags, process_ver=process_ver)
 
-#open sidecar and update
-lr_xmp_file = pyexiv2.Image(filepath_lr_xmp.as_posix())
-# exif = img.read_exif()
-# iptc = img.read_iptc()
-# xmp = img.read_xmp()
-xmp = lr_xmp_file.read_xmp()
-raw_xmp=lr_xmp_file.read_raw_xmp()
-lr_xmp_file.modify_xmp(intersect_dict)
-lr_xmp_file.close()
+
+# stack data
+new_xmp = pyexiv2.Image(temp_files["orig"].as_posix())
+
+
+
+new_xmp=extend_xmp(new_xmp,temp_files["db"])
+if temp_files["sidecar_lr"].is_file():
+    new_xmp=extend_xmp(new_xmp,temp_files["sidecar_lr"])
+if temp_files["sidecar_darktable"].is_file():
+    new_xmp=extend_xmp(new_xmp,temp_files["sidecar_darktable"])
+
+
+
+new_xmp.modify_xmp(intersect_dict)
+
+
+
+# copy data back to LR format file
+
+
+if filepath_lr_xmp.is_file():
+    # update
+    with pyexiv2.Image(filepath_lr_xmp.as_posix()) as img:
+        img.modify_xmp(new_xmp.read_xmp())
+
+else:
+    # copy
+    shutil.copy(temp_files["orig"], filepath_lr_xmp)
+
+
+new_xmp.close()
+
+
+
+
+# paths: original file xmp copy, database xmp, sidecar file.xmp, sidecar file.ext.xmp, 
+# create files
+# stack data
+# copy back
+# delete files
+
+
 
 
 
@@ -208,31 +205,20 @@ lr_xmp_file.close()
 # stack all XMP data file, sidecar, db_xmp, then processtext
 
 
-temp_dir=pathlib.Path("/dev/shm/xmp_editing")
-temp_files={
-    "orig":pathlib.Path(temp_dir,"orig.xmp"),
-    "db":pathlib.Path(temp_dir,"db.xmp"),
-    "sidecar1":pathlib.Path(temp_dir,"sidecar.xmp"),
-    "sidecar2":pathlib.Path(temp_dir,"sidecar.ext.xmp"),
-}
-
-temp_files["orig"]
 
 
-# paths: original file xmp copy, database xmp, sidecar file.xmp, sidecar file.ext.xmp, 
-# create files
-# stack data
-# copy back
-# delete files
 
 
-temp_dir.mkdir(parents=True, exist_ok=True)
-with open(temp_files["orig"], 'w') as f:
-    f.write(raw_xmp)
 
-with pyexiv2.Image(temp_files["orig"].as_posix()) as img:
-    file_xmp = img.read_xmp()
 
+
+# Cleanup temp files:
+for key,val in temp_files.items():
+    try:
+        val.unlink()
+    except FileNotFoundError:
+        logger.debug(f"file not found for cleanup: {key}, {val}")
+        pass
 
 
 #need check to confirm there is an exif block with resolution in it
@@ -271,3 +257,7 @@ def process_file(filepath:str,database_info):
     # else:
         # write new file
 
+
+
+# clean up temp folder:
+temp_dir.rmdir()
