@@ -5,6 +5,7 @@ import sqlite3
 
 import pandas as pd
 import pyexiv2
+import tempfile
 import yaml
 from logzero import logger
 from slpp import slpp as lua
@@ -22,10 +23,6 @@ with open(config) as c_file:
 
 root_path = pathlib.Path(config_data["root_path"])
 
-# set up temp folder in tmpfs to keep it in memory
-# /dev/shm is a ramdisk. Create files here for ephemeral transformations that require writing to disk
-temp_dir = pathlib.Path("/dev/shm/xmp_editing")
-temp_dir.mkdir(parents=True, exist_ok=True)
 
 # load tags darktable can process:
 # with importlib.resources.files("tags").joinpath("crs_tags.txt").open('r', encoding="utf8") as f:
@@ -108,10 +105,13 @@ def extend_xmp(base: pyexiv2.core.Image, xmp_file: pathlib.PosixPath):
     with pyexiv2.Image(xmp_file.as_posix()) as img:
         file_xmp = img.read_xmp()
 
+    # TODO: need to drop bad tags like "Xmp.xmpMM.History[x]"
+    # when reading in this or anything with ", " in them, it gets messed up
+
     # update xmp data
     base.modify_xmp(file_xmp)
 
-    return base
+    # return base
 
 
 def process_file(data_series):
@@ -135,20 +135,21 @@ def process_file(data_series):
         logger.info(f"File {filepath} not found")
         return
 
+    # set up temp folder in tmpfs to keep it in memory
+    # /dev/shm is a ramdisk. Create files here for ephemeral transformations that require writing to disk
+    tempdir = tempfile.TemporaryDirectory(dir="/dev/shm")
+    temp_dir_path = pathlib.Path(tempdir.name)
+
     # paths: original file xmp copy, database xmp, sidecar file.xmp, sidecar file.ext.xmp,
     temp_files = {
-        "orig": pathlib.Path(temp_dir, "orig.xmp"),
-        "db": pathlib.Path(temp_dir, "db.xmp"),
-        "sidecar_lr": pathlib.Path(temp_dir, "sidecar.xmp"),
-        "sidecar_darktable": pathlib.Path(temp_dir, "sidecar.ext.xmp"),
+        "orig": pathlib.Path(temp_dir_path, "orig.xmp"),
+        "db": pathlib.Path(temp_dir_path, "db.xmp"),
+        "sidecar_lr": pathlib.Path(temp_dir_path, "sidecar.xmp"),
+        "sidecar_darktable": pathlib.Path(temp_dir_path, "sidecar.ext.xmp"),
     }
 
     # Create temp files from extracted data
-
-    if filepath.is_file():
-        copy_xmp_temp(filepath, temp_files["orig"])
-    else:
-        raise FileNotFoundError(f"Not found: {filepath}")
+    copy_xmp_temp(filepath, temp_files["orig"])
 
     # write database XMP to temp
     with open(temp_files["db"], "w") as f:
@@ -168,28 +169,26 @@ def process_file(data_series):
     # stack all XMP data file, sidecar, db_xmp, then add processtext
     new_xmp = pyexiv2.Image(temp_files["orig"].as_posix())
 
-    new_xmp = extend_xmp(new_xmp, temp_files["db"])
+    extend_xmp(new_xmp, temp_files["db"])
     if temp_files["sidecar_lr"].is_file():
-        new_xmp = extend_xmp(new_xmp, temp_files["sidecar_lr"])
+        extend_xmp(new_xmp, temp_files["sidecar_lr"])
     if temp_files["sidecar_darktable"].is_file():
-        new_xmp = extend_xmp(new_xmp, temp_files["sidecar_darktable"])
+        extend_xmp(new_xmp, temp_files["sidecar_darktable"])
 
     new_xmp.modify_xmp(intersect_dict)
 
-    # copy data back to LR format file
-
     if filepath_lr_xmp.is_file():
         # update
+        # copy data back to LR format file
         with pyexiv2.Image(filepath_lr_xmp.as_posix()) as img:
             img.modify_xmp(new_xmp.read_xmp())
-
     else:
-        # copy
+        # copy "original" as this is the file corresponding to new_xmp
         shutil.copy(temp_files["orig"], filepath_lr_xmp)
 
     new_xmp.close()
 
-    # final file cleanup
+    final_xmp = pyexiv2.Image(filepath_lr_xmp.as_posix())
 
     # if the label is none, remove it. This would otherwise get set as a purple label
     # <xmp:Label>None</xmp:Label>
@@ -201,20 +200,31 @@ def process_file(data_series):
     #         ImageLength
     #         Orientation
 
-    # delete files
-    # Cleanup temp files:
-    for key, val in temp_files.items():
-        try:
-            val.unlink()
-        except FileNotFoundError:
-            logger.debug(f"file not found for cleanup: {key}, {val}")
+    final_xmp_dict = final_xmp.read_xmp()
+    if str(final_xmp_dict.get("Xmp.crs.HasCrop")).lower() == "true":
+        required_fields = set(
+            [
+                "CropTop",
+                "CropRight",
+                "CropLeft",
+                "CropBottom",
+                "CropAngle",
+                "ImageWidth",
+                "ImageLength",
+                "Orientation",
+            ]
+        )
+        for key in final_xmp_dict.keys():
+            short_key = key.split(".")[-1]
+            required_fields.discard(short_key)
+
+        if len(required_fields) > 0:
+            logger.error(f"Missing required fields: {required_fields}")
+
+    # clean up temp folder:
+    tempdir.cleanup()
 
 
 for i, data_series in df.iterrows():
-    logger.debug("Index: {i}")
+    logger.info(f"Index: {i}, name: {data_series.loc['BaseName']}")
     process_file(data_series)
-
-
-# clean up temp folder:
-# temp_dir.rmdir()
-shutil.rmtree(temp_dir)
