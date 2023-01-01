@@ -14,7 +14,7 @@ from slpp import slpp as lua
 # This will sync the database with the new darktable xmp files
 
 pyexiv2.set_log_level(4)
-logger.setLevel(level="INFO")
+logger.setLevel(level="DEBUG")
 # load settings
 config = importlib.resources.files("untracked").joinpath("config.yml")
 
@@ -96,8 +96,8 @@ def copy_xmp_temp(from_file: pathlib.PosixPath, to_file: pathlib.PosixPath):
         # write data to temp
         with open(to_file, "w") as f:
             f.write(file_raw_xmp)
-    except RuntimeError:
-        logger.debug(f"file not found: {from_file}")
+    except RuntimeError as e:
+        logger.debug(f"Problem working on {from_file}: {e}")
 
 
 def extend_xmp(base: pyexiv2.core.Image, xmp_file: pathlib.PosixPath):
@@ -107,11 +107,38 @@ def extend_xmp(base: pyexiv2.core.Image, xmp_file: pathlib.PosixPath):
 
     # TODO: need to drop bad tags like "Xmp.xmpMM.History[x]"
     # when reading in this or anything with ", " in them, it gets messed up
+    count = 0
+    for k, v in file_xmp.items():
+        if "," in v:
+            logger.warning(f"found problematic key/value: {k}: {v}")
+            count += 1
+    fixed_xmp = _fix_xmp(file_xmp)
 
     # update xmp data
-    base.modify_xmp(file_xmp)
+    if count > 0:
+        base.modify_xmp(_fix_xmp(file_xmp))
+    else:
+        base.modify_xmp(file_xmp)
 
     # return base
+
+
+import re
+
+ARRAY_IDX_PATTERN = re.compile(r"\[\d+\]")
+
+# from https://github.com/pyinat/naturtag/pull/169/files
+def _fix_xmp(xmp):
+    """Fix some invalid XMP tags"""
+    for k, v in xmp.items():
+        # Flatten dict values, like {'lang="x-default"': value} -> value
+        if isinstance(v, dict):
+            xmp[k] = list(v.values())[0]
+        # XMP won't accept both a single value and an array with the same key
+        if k.endswith("]") and (nonarray_key := ARRAY_IDX_PATTERN.sub("", k)) in xmp:
+            xmp[nonarray_key] = None
+    xmp = {k: v for k, v in xmp.items() if v is not None}
+    return xmp
 
 
 def process_file(data_series):
@@ -177,21 +204,41 @@ def process_file(data_series):
 
     new_xmp.modify_xmp(intersect_dict)
 
+    # load to check work and write back to original file
+    new_xmp_dict = new_xmp.read_xmp()
+
+    # apply fixes to ensure clean write
+    new_xmp_dict = _fix_xmp(new_xmp_dict)
+
+    # if the label is none, remove it. This would otherwise get set as a purple label
+    # field set to none so if modifying existing file the field is removed
+    # to bes successful, this must be applied after doing any "fixes" on the xmp
+    field_to_delete = "Xmp.xmp.Label"
+    if (
+        field_to_delete in new_xmp_dict.keys()
+        and str(new_xmp_dict[field_to_delete]) == "None"
+    ):
+        # new_xmp.modify_xmp({field_to_delete: None})
+        new_xmp_dict[field_to_delete] = None
+        logger.error(f"Problematic XMP: {field_to_delete} deleted")
+
     if filepath_lr_xmp.is_file():
         # update
         # copy data back to LR format file
         with pyexiv2.Image(filepath_lr_xmp.as_posix()) as img:
-            img.modify_xmp(new_xmp.read_xmp())
+            img_xmp_before = img.read_xmp()
+            img.modify_xmp(new_xmp_dict)
+            # img_xmp = img.read_xmp()
+        logger.debug(f"updated {filepath_lr_xmp}")
     else:
+        # flush any fixes to the file
+        new_xmp.modify_xmp(new_xmp_dict)
         # copy "original" as this is the file corresponding to new_xmp
         shutil.copy(temp_files["orig"], filepath_lr_xmp)
-
+        logger.debug(f"copied file to {filepath_lr_xmp}")
     new_xmp.close()
 
     final_xmp = pyexiv2.Image(filepath_lr_xmp.as_posix())
-
-    # if the label is none, remove it. This would otherwise get set as a purple label
-    # <xmp:Label>None</xmp:Label>
 
     # need check to confirm there is an exif block with resolution in it
     # if HasCrop:
@@ -201,6 +248,12 @@ def process_file(data_series):
     #         Orientation
 
     final_xmp_dict = final_xmp.read_xmp()
+
+    # Final check of output file
+    label = final_xmp_dict.get("Xmp.xmp.Label")
+    if label == "None":
+        logger.error(f"Final_XMP - Problematic Label: None")
+
     if str(final_xmp_dict.get("Xmp.crs.HasCrop")).lower() == "true":
         required_fields = set(
             [
@@ -219,7 +272,26 @@ def process_file(data_series):
             required_fields.discard(short_key)
 
         if len(required_fields) > 0:
-            logger.error(f"Missing required fields: {required_fields}")
+            logger.error(f"Final_XMP - Missing required fields: {required_fields}")
+
+            # # fix exif data
+            # exif_set = {"ImageWidth", "ImageLength", "Orientation"}
+            # if len(required_fields.intersection(exif_set)) > 0:
+            #     with pyexiv2.Image(filepath.as_posix()) as img:
+            #         file_exif = img.read_exif()
+            #     exif_update = {
+            #         "Exif.Image.ImageWidth": file_exif["Exif.Image.ImageWidth"],
+            #         "Exif.Image.ImageLength": file_exif["Exif.Image.ImageLength"],
+            #         "Exif.Image.Orientation": file_exif["Exif.Image.Orientation"],
+            #     }
+
+            # crop_set = {
+            #     "CropTop",
+            #     "CropRight",
+            #     "CropLeft",
+            #     "CropBottom",
+            #     "CropAngle",
+            # }
 
     # clean up temp folder:
     tempdir.cleanup()

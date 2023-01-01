@@ -15,6 +15,7 @@ numpy = "^1.23.4"
 slpp = { git = "https://github.com/SirAnthony/slpp" }
 logzero = "^1.7.0"
 pyexiv2 = "^2.8.1"
+pyexiftool = "^0.5.4"
 
 [tool.poetry.dev-dependencies]
 mypy = "^0.990"

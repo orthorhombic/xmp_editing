@@ -1232,6 +1232,19 @@ snowballstemmer = "*"
 toml = ["toml"]
 
 [[package]]
+name = "pyexiftool"
+version = "0.5.4"
+description = "Python wrapper for exiftool"
+category = "main"
+optional = false
+python-versions = ">=3.6"
+
+[package.extras]
+docs = ["packaging", "sphinx", "sphinx-autoapi", "sphinx-autodoc-typehints", "sphinx-rtd-theme"]
+json = ["ujson"]
+test = ["packaging"]
+
+[[package]]
 name = "pyexiv2"
 version = "2.8.1"
 description = "Read/Write metadata(including EXIF, IPTC, XMP), comment and ICC Profile embedded in digital images."
@@ -1714,7 +1727,7 @@ python-versions = ">=3.7"
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.10.4"
-content-hash = "57d50982999065c245e8f443995520dd560df24ce586afdd64b5328a9516021e"
+content-hash = "941bd289ca3f92c56296da5c9e02517df8b84a2f3cc12b7c4163f0f834d49244"
 
 [metadata.files]
 anyio = [
@@ -2567,6 +2580,10 @@ pycparser = [
 pydocstyle = [
     {file = "pydocstyle-6.1.1-py3-none-any.whl", hash = "sha256:6987826d6775056839940041beef5c08cc7e3d71d63149b48e36727f70144dc4"},
     {file = "pydocstyle-6.1.1.tar.gz", hash = "sha256:1d41b7c459ba0ee6c345f2eb9ae827cab14a7533a88c5c6f7e94923f72df92dc"},
+]
+pyexiftool = [
+    {file = "PyExifTool-0.5.4-py3-none-any.whl", hash = "sha256:a223852c8899cb118858439b610c820cc5284843f017e42c50d0f13099d6ea15"},
+    {file = "PyExifTool-0.5.4.tar.gz", hash = "sha256:d14244ded3cafb0db01ca8bd85453ed99b0d9a0bcaca6ba3106ff662b580c890"},
 ]
 pyexiv2 = [
     {file = "pyexiv2-2.8.1-cp310-none-macosx_10_14_x86_64.macosx_11_0_x86_64.whl", hash = "sha256:1133b63bc66dc4ee0d958394d46cc371f63570530dcd6c95ff0986c39ad9bab6"},
