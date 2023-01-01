@@ -1,11 +1,12 @@
 import importlib
 import pathlib
+import re
 import shutil
 import sqlite3
+import tempfile
 
 import pandas as pd
 import pyexiv2
-import tempfile
 import yaml
 from logzero import logger
 from slpp import slpp as lua
@@ -112,7 +113,7 @@ def extend_xmp(base: pyexiv2.core.Image, xmp_file: pathlib.PosixPath):
         if "," in v:
             logger.warning(f"found problematic key/value: {k}: {v}")
             count += 1
-    fixed_xmp = _fix_xmp(file_xmp)
+    _fix_xmp(file_xmp)
 
     # update xmp data
     if count > 0:
@@ -123,11 +124,11 @@ def extend_xmp(base: pyexiv2.core.Image, xmp_file: pathlib.PosixPath):
     # return base
 
 
-import re
-
 ARRAY_IDX_PATTERN = re.compile(r"\[\d+\]")
 
 # from https://github.com/pyinat/naturtag/pull/169/files
+
+
 def _fix_xmp(xmp):
     """Fix some invalid XMP tags"""
     for k, v in xmp.items():
@@ -226,7 +227,7 @@ def process_file(data_series):
         # update
         # copy data back to LR format file
         with pyexiv2.Image(filepath_lr_xmp.as_posix()) as img:
-            img_xmp_before = img.read_xmp()
+            img.read_xmp()
             img.modify_xmp(new_xmp_dict)
             # img_xmp = img.read_xmp()
         logger.debug(f"updated {filepath_lr_xmp}")
@@ -255,18 +256,16 @@ def process_file(data_series):
         logger.error(f"Final_XMP - Problematic Label: None")
 
     if str(final_xmp_dict.get("Xmp.crs.HasCrop")).lower() == "true":
-        required_fields = set(
-            [
-                "CropTop",
-                "CropRight",
-                "CropLeft",
-                "CropBottom",
-                "CropAngle",
-                "ImageWidth",
-                "ImageLength",
-                "Orientation",
-            ]
-        )
+        required_fields = {
+            "CropTop",
+            "CropRight",
+            "CropLeft",
+            "CropBottom",
+            "CropAngle",
+            "ImageWidth",
+            "ImageLength",
+            "Orientation",
+        }
         for key in final_xmp_dict.keys():
             short_key = key.split(".")[-1]
             required_fields.discard(short_key)
