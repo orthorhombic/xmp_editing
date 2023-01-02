@@ -1,4 +1,4 @@
-import importlib
+import importlib.resources
 import pathlib
 import re
 import shutil
@@ -347,6 +347,12 @@ def process_file(data_series):
     tempdir.cleanup()
 
 
-for i, data_series in df.iterrows():
-    logger.info(f"Index: {i}, name: {data_series.loc['BaseName']}")
-    process_file(data_series)
+def main():
+    for i, data_series in df.iterrows():
+        logger.info(f"Index: {i}, name: {data_series.loc['BaseName']}")
+        process_file(data_series)
+
+
+if __name__ == "__main__":
+    logger.info("Running main()")
+    main()
