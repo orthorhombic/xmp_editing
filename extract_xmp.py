@@ -14,7 +14,7 @@ from slpp import slpp as lua
 # NOTE: After import into darktable, the metadata "refresh EXIF" button needs to be pressed
 # This will sync the database with the new darktable xmp files
 
-pyexiv2.set_log_level(4)
+pyexiv2.set_log_level(1)
 logger.setLevel(level="DEBUG")
 # load settings
 config = importlib.resources.files("untracked").joinpath("config.yml")
@@ -107,13 +107,13 @@ def extend_xmp(base: pyexiv2.core.Image, xmp_file: pathlib.PosixPath):
         file_xmp = img.read_xmp()
 
     # TODO: need to drop bad tags like "Xmp.xmpMM.History[x]"
+    # history tags cannot be updated per documentation: https://github.com/LeoHsiao1/pyexiv2/blob/master/docs/Tutorial.md
     # when reading in this or anything with ", " in them, it gets messed up
     count = 0
     for k, v in file_xmp.items():
         if "," in v:
             logger.warning(f"found problematic key/value: {k}: {v}")
             count += 1
-    _fix_xmp(file_xmp)
 
     # update xmp data
     if count > 0:
@@ -122,6 +122,14 @@ def extend_xmp(base: pyexiv2.core.Image, xmp_file: pathlib.PosixPath):
         base.modify_xmp(file_xmp)
 
     # return base
+
+
+def extract_xmp(xmp_file: pathlib.PosixPath) -> dict:
+    with pyexiv2.Image(xmp_file.as_posix()) as img:
+        file_xmp = img.read_xmp()
+
+    drop_fields(file_xmp)
+    return file_xmp
 
 
 ARRAY_IDX_PATTERN = re.compile(r"\[\d+\]")
@@ -140,6 +148,32 @@ def _fix_xmp(xmp):
             xmp[nonarray_key] = None
     xmp = {k: v for k, v in xmp.items() if v is not None}
     return xmp
+
+
+def drop_fields(xmp_dict: dict):
+    """Operates in place on the provided XMP dictionary to remove problematic entries.
+    These include accompanying tags for anything with 'type="Struct"' or 'type="Seq"'
+    """
+    keys_list = list(xmp_dict.keys())
+    bad_keys = []
+    drop_set = set()
+    for k, v in xmp_dict.items():
+        if v in ['type="Struct"', 'type="Seq"']:
+            bad_keys.append(k)
+
+    for key in bad_keys:
+        # key="Xmp.xmpMM.History[1]"
+        # r = re.compile(key+".*")
+        # bad_key_iterator = filter(r.match, keys_list)
+
+        bad_temp = [x for x in keys_list if x.startswith(key)]
+        # print(f" from {key}, dropping: ", list(bad_temp))
+        drop_set.update(bad_temp)
+
+    # drop everything from the set
+    [xmp_dict.pop(key) for key in drop_set]
+
+    # return xmp_dict
 
 
 def process_file(data_series):
@@ -176,6 +210,8 @@ def process_file(data_series):
         "sidecar_darktable": pathlib.Path(temp_dir_path, "sidecar.ext.xmp"),
     }
 
+    # temporarilty change the log level to allow reading of the xmp data
+    pyexiv2.set_log_level(4)
     # Create temp files from extracted data
     copy_xmp_temp(filepath, temp_files["orig"])
 
@@ -188,56 +224,71 @@ def process_file(data_series):
     copy_xmp_temp(filepath_lr_xmp, temp_files["sidecar_lr"])
     copy_xmp_temp(filepath_darktable_xmp, temp_files["sidecar_darktable"])
 
+    # change back to normal log level to observe xmp updating
+    pyexiv2.set_log_level(1)
+
     # prepare data from database for stacking
     intersect_dict = parse_lightroom_processtext(
         lightroom_processtext=lightroom_processtext, tags=tags, process_ver=process_ver
     )
 
     # stack data
-    # stack all XMP data file, sidecar, db_xmp, then add processtext
-    new_xmp = pyexiv2.Image(temp_files["orig"].as_posix())
+    temp_xmp = {}
+    for k, v in temp_files.items():
+        if v.is_file():
+            logger.debug(f"loading {v}")
+            temp_xmp[k] = extract_xmp(v)
 
-    extend_xmp(new_xmp, temp_files["db"])
-    if temp_files["sidecar_lr"].is_file():
-        extend_xmp(new_xmp, temp_files["sidecar_lr"])
-    if temp_files["sidecar_darktable"].is_file():
-        extend_xmp(new_xmp, temp_files["sidecar_darktable"])
+    # combine dictionaries
+    combined_xmp = {}
+    order = [
+        "orig",
+        "db",
+        "sidecar_lr",
+        "sidecar_darktable",
+    ]
+    for key in order:
+        xmp = temp_xmp.get(key)
+        if xmp is not None:
+            combined_xmp.update(xmp)
 
-    new_xmp.modify_xmp(intersect_dict)
-
-    # load to check work and write back to original file
-    new_xmp_dict = new_xmp.read_xmp()
-
-    # apply fixes to ensure clean write
-    new_xmp_dict = _fix_xmp(new_xmp_dict)
+    # add data from database
+    combined_xmp.update(intersect_dict)
 
     # if the label is none, remove it. This would otherwise get set as a purple label
     # field set to none so if modifying existing file the field is removed
     # to bes successful, this must be applied after doing any "fixes" on the xmp
     field_to_delete = "Xmp.xmp.Label"
     if (
-        field_to_delete in new_xmp_dict.keys()
-        and str(new_xmp_dict[field_to_delete]) == "None"
+        field_to_delete in combined_xmp.keys()
+        and str(combined_xmp[field_to_delete]) == "None"
     ):
         # new_xmp.modify_xmp({field_to_delete: None})
-        new_xmp_dict[field_to_delete] = None
+        combined_xmp[field_to_delete] = None
         logger.error(f"Problematic XMP: {field_to_delete} deleted")
+
+    # apply fixes to ensure clean write
+    # new_xmp_dict = _fix_xmp(new_xmp_dict)
 
     if filepath_lr_xmp.is_file():
         # update
         # copy data back to LR format file
         with pyexiv2.Image(filepath_lr_xmp.as_posix()) as img:
-            img.read_xmp()
-            img.modify_xmp(new_xmp_dict)
-            # img_xmp = img.read_xmp()
+            # img.read_xmp()
+            img.modify_xmp(combined_xmp)
+            img_xmp = img.read_xmp()
         logger.debug(f"updated {filepath_lr_xmp}")
     else:
-        # flush any fixes to the file
-        new_xmp.modify_xmp(new_xmp_dict)
+
+        new_xmp = pyexiv2.Image(temp_files["orig"].as_posix())
+
+        new_xmp.modify_xmp(combined_xmp)
+
+        new_xmp.close()
+
         # copy "original" as this is the file corresponding to new_xmp
         shutil.copy(temp_files["orig"], filepath_lr_xmp)
         logger.debug(f"copied file to {filepath_lr_xmp}")
-    new_xmp.close()
 
     final_xmp = pyexiv2.Image(filepath_lr_xmp.as_posix())
 
