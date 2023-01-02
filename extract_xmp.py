@@ -150,12 +150,14 @@ def _fix_xmp(xmp):
     return xmp
 
 
-def drop_fields(xmp_dict: dict):
+def drop_fields(xmp_dict: dict, extra_keys: list = None):
     """Operates in place on the provided XMP dictionary to remove problematic entries.
     These include accompanying tags for anything with 'type="Struct"' or 'type="Seq"'
     """
     keys_list = list(xmp_dict.keys())
     bad_keys = []
+    if extra_keys is not None:
+        bad_keys = bad_keys + extra_keys
     drop_set = set()
     for k, v in xmp_dict.items():
         if v in ['type="Struct"', 'type="Seq"']:
@@ -274,9 +276,21 @@ def process_file(data_series):
         # update
         # copy data back to LR format file
         with pyexiv2.Image(filepath_lr_xmp.as_posix()) as img:
-            # img.read_xmp()
-            img.modify_xmp(combined_xmp)
+            # read in the xmp from final file to check for tags that cannot be overwritten
             img_xmp = img.read_xmp()
+            extra_keys_to_drop = []
+            for k, v in img_xmp.items():
+                if v in ['type="Struct"', 'type="Seq"']:
+                    extra_keys_to_drop.append(k)
+
+            # drop fields if anything was identified
+            if len(extra_keys_to_drop) > 0:
+                drop_fields(combined_xmp, extra_keys=extra_keys_to_drop)
+
+            # modify the file with the updated dictionary
+            img.modify_xmp(combined_xmp)
+            # for xmp_key, xmp_val in combined_xmp.items():
+            #     img.modify_xmp({xmp_key: xmp_val})
         logger.debug(f"updated {filepath_lr_xmp}")
     else:
 
