@@ -8,6 +8,7 @@ import tempfile
 import pandas as pd
 import pyexiv2
 import yaml
+import logzero
 from logzero import logger
 from slpp import slpp as lua
 
@@ -15,6 +16,7 @@ from slpp import slpp as lua
 # This will sync the database with the new darktable xmp files
 
 pyexiv2.set_log_level(1)
+logzero.logfile("rotating-logfile.log", maxBytes=1e8, backupCount=3)
 logger.setLevel(level="DEBUG")
 # load settings
 config = importlib.resources.files("untracked").joinpath("config.yml")
@@ -60,7 +62,10 @@ def parse_lightroom_processtext(
     """Process lightroom parameters compatible with darktable.
     See https://github.com/darktable-org/darktable/blob/master/src/develop/lightroom.c for info."""
 
-    if lightroom_processtext[0:4] == "s = ":
+    if len(lightroom_processtext) == 0:
+        # if no process text, return empty dictionary
+        return {}
+    elif lightroom_processtext[0:4] == "s = ":
         data = lua.decode(lightroom_processtext[4:])
     else:
         logger.critical("unexpected start to lua string")
@@ -97,6 +102,13 @@ def copy_xmp_temp(from_file: pathlib.PosixPath, to_file: pathlib.PosixPath):
         # write data to temp
         with open(to_file, "w") as f:
             f.write(file_raw_xmp)
+        # confirm the raw xmp can be opened
+        with pyexiv2.Image(to_file.as_posix()) as img:
+            file_xmp = img.read_xmp()
+            assert file_xmp != {}
+    except AssertionError:
+        logger.critical(f"Could not load written xmp for {from_file}")
+        raise EnvironmentError(f"Could not load written xmp for {from_file}")
     except RuntimeError as e:
         logger.debug(f"Problem working on {from_file}: {e}")
 
@@ -180,6 +192,7 @@ def drop_fields(xmp_dict: dict, extra_keys: list = None):
 
 def process_file(data_series):
 
+    path_from_root = data_series.loc["PathFromRoot"]
     temp_path = data_series.loc["BaseName"] + "." + data_series.loc["FileType"]
     lr_xmp_path = data_series.loc["BaseName"] + ".xmp"
     darktable_xmp_path = (
@@ -190,13 +203,13 @@ def process_file(data_series):
     db_xmp = data_series.loc["xmp"]
 
     # combine path
-    filepath = pathlib.Path(root_path, temp_path)
-    filepath_lr_xmp = pathlib.Path(root_path, lr_xmp_path)
-    filepath_darktable_xmp = pathlib.Path(root_path, darktable_xmp_path)
+    filepath = pathlib.Path(root_path, path_from_root, temp_path)
+    filepath_lr_xmp = pathlib.Path(root_path, path_from_root, lr_xmp_path)
+    filepath_darktable_xmp = pathlib.Path(root_path, path_from_root, darktable_xmp_path)
 
     # check the file first, abort if it isn't there
     if not filepath.is_file():
-        logger.info(f"File {filepath} not found")
+        logger.warning(f"File {filepath} not found")
         return
 
     # set up temp folder in tmpfs to keep it in memory
@@ -267,7 +280,7 @@ def process_file(data_series):
     ):
         # new_xmp.modify_xmp({field_to_delete: None})
         combined_xmp[field_to_delete] = None
-        logger.error(f"Problematic XMP: {field_to_delete} deleted")
+        logger.info(f"Problematic XMP: {field_to_delete} deleted")
 
     # apply fixes to ensure clean write
     # new_xmp_dict = _fix_xmp(new_xmp_dict)
@@ -363,7 +376,9 @@ def process_file(data_series):
 
 def main():
     for i, data_series in df.iterrows():
-        logger.info(f"Index: {i}, name: {data_series.loc['BaseName']}")
+        logger.info(
+            f"Index: {i}, name: {data_series.loc['PathFromRoot']}{data_series.loc['BaseName']}"
+        )
         process_file(data_series)
 
 
