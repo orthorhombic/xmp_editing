@@ -27,6 +27,14 @@ with open(config) as c_file:
 
 root_path = pathlib.Path(config_data["root_path"])
 
+empty_xml = """<x:xmpmeta xmlns:x="adobe:ns:meta/" x:xmptk="XMP Core 5.5.0">
+ <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+  <rdf:Description rdf:about=""
+    xmlns:photoshop="http://ns.adobe.com/photoshop/1.0/"
+    xmlns:xmp="http://ns.adobe.com/xap/1.0/">
+  </rdf:Description>
+ </rdf:RDF>
+</x:xmpmeta>"""
 
 # load tags darktable can process:
 # with importlib.resources.files("tags").joinpath("crs_tags.txt").open('r', encoding="utf8") as f:
@@ -49,6 +57,7 @@ WHERE
     --or baseName like 'LWP42267%'
     --or baseName like 'wedding 583%'
     --or baseName like 'Star Trails-4%'
+    --or baseName like 'Na3Bi-111345%'
     --) 
     (PathFromRoot like '2013%' or PathFromRoot like '2014%')
     and 
@@ -157,17 +166,17 @@ def copy_xmp_temp(
     # strip null characters common in some languages
     file_raw_xmp = file_raw_xmp.strip("\x00")
     if file_raw_xmp == "":
-        raise ValueError(f"Empty XMP retrieved for {from_file}")
+        # raise ValueError(f"Empty XMP retrieved for {from_file}")
+        logger.warning(f"Empty XMP retrieved for {from_file}. Using empty XML string")
         # logger.debug(f"Problem working on {from_file}: {e}")
+        file_raw_xmp = empty_xml
 
         # write data to temp
         with open(to_file, "w") as f:
             f.write(file_raw_xmp)
-        # confirm the raw xmp can be opened
+    # confirm the raw xmp can be opened - this requires the log level is not at 4 (muted)
         with pyexiv2.Image(to_file.as_posix()) as img:
             file_xmp = img.read_xmp()
-    if file_xmp == {}:
-        raise ValueError("Loaded XMP could not be reloaded for {from_file}")
 
 
 def check_drop_modify(file_to_modify, xmp_to_clean):
@@ -390,7 +399,7 @@ def process_file(data_series, et, update_file: bool = True):
 
     # Final check of output file
     label = final_xmp_dict.get("Xmp.xmp.Label")
-    if label == "None":
+    if label == "None" and update_file:
         logger.error(f"Final_XMP - Problematic Label: None")
 
     if str(final_xmp_dict.get("Xmp.crs.HasCrop")).lower() == "true":
