@@ -1,10 +1,15 @@
+import importlib.resources
 import sqlite3
 
 import pandas as pd
 import seaborn as sns
 
+
+# Creating the path to the lightroom catalog
+catalog = importlib.resources.files("untracked").joinpath("LightroomCatalog.lrcat")
+
 # Create your connection.
-cnx = sqlite3.connect("Lightroom Catalog.lrcat")
+cnx = sqlite3.connect(catalog)
 
 
 df = pd.read_sql_query("SELECT * FROM Img", cnx)

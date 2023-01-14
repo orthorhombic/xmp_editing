@@ -5,10 +5,11 @@ import shutil
 import sqlite3
 import tempfile
 
+import logzero
 import pandas as pd
 import pyexiv2
 import yaml
-import logzero
+from exiftool import ExifTool
 from logzero import logger
 from slpp import slpp as lua
 
@@ -41,9 +42,9 @@ WHERE baseName like 'Crystal-0075%'
 or baseName like 'Crystals-1600%'
 or baseName like 'London-3471%'
 or baseName like 'LWP42267%'
-
-
+or baseName like 'wedding 583%'
 """
+# where (PathFromRoot like '2013%' or PathFromRoot like '2014%')
 
 # Creating the path to the lightroom catalog
 catalog = importlib.resources.files("untracked").joinpath("LightroomCatalog.lrcat")
@@ -57,7 +58,7 @@ cnx.close()
 
 
 def parse_lightroom_processtext(
-    lightroom_processtext: str, tags: list[str], process_ver: float = 6.7
+    lightroom_processtext: str, tags: list[str], process_ver: str
 ):
     """Process lightroom parameters compatible with darktable.
     See https://github.com/darktable-org/darktable/blob/master/src/develop/lightroom.c for info."""
@@ -73,7 +74,18 @@ def parse_lightroom_processtext(
 
     tagintersect = set(tags).intersection(set(data.keys()))
     intersect_dict = {f"Xmp.crs.{k}": data[k] for k in tagintersect}
-    if "Xmp.crs.CropTop" in intersect_dict.keys():
+    required_crop_fields = {
+        "Xmp.crs.CropTop",
+        "Xmp.crs.CropRight",
+        "Xmp.crs.CropLeft",
+        "Xmp.crs.CropBottom",
+        "Xmp.crs.CropAngle",
+    }
+    intersection_size = len(
+        required_crop_fields.intersection(set(intersect_dict.keys()))
+    )
+    # if any crop fields are specified, set the crop attribute to True
+    if intersection_size > 0:
         intersect_dict["Xmp.crs.HasCrop"] = "True"
 
     if "Xmp.crs.ToneCurvePV2012" in intersect_dict.keys():
@@ -91,26 +103,66 @@ def parse_lightroom_processtext(
 
         intersect_dict["Xmp.crs.ToneCurvePV2012"] = new_list
 
+    # keep process version for future reference, though this does not
+    # appear to be used by darktable.
+    lua_process_version = data.get("ProcessVersion")
+    if lua_process_version is not None:
+        intersect_dict["Xmp.crs.ProcessVersion"] = lua_process_version
+    else:
+        intersect_dict["Xmp.crs.ProcessVersion"] = process_ver
+
     return intersect_dict
 
 
-def copy_xmp_temp(from_file: pathlib.PosixPath, to_file: pathlib.PosixPath):
-    try:
-        # open source file
-        with pyexiv2.Image(from_file.as_posix()) as img:
-            file_raw_xmp = img.read_raw_xmp()
+def copy_xmp_temp(
+    from_file: pathlib.PosixPath,
+    to_file: pathlib.PosixPath,
+    et: ExifTool,
+    warn: bool = False,
+):
+
+    # exiftool implementation. Does not contain much error handling
+    # will not raise an error if the file does not exist
+    if not from_file.is_file():
+        if warn:
+            logger.warning(f"File {from_file} not found")
+        else:
+            logger.debug(f"File {from_file} not found")
+        return
+
+    # run exiftool command on file to return xmp string
+    file_raw_xmp = et.execute(*["-xmp", "-b", str(from_file.as_posix())])
+    # strip null characters common in some languages
+    file_raw_xmp = file_raw_xmp.strip("\x00")
+    if file_raw_xmp == "":
+        raise ValueError(f"Empty XMP retrieved for {from_file}")
+        # logger.debug(f"Problem working on {from_file}: {e}")
+
         # write data to temp
         with open(to_file, "w") as f:
             f.write(file_raw_xmp)
         # confirm the raw xmp can be opened
         with pyexiv2.Image(to_file.as_posix()) as img:
             file_xmp = img.read_xmp()
-            assert file_xmp != {}
-    except AssertionError:
-        logger.critical(f"Could not load written xmp for {from_file}")
-        raise EnvironmentError(f"Could not load written xmp for {from_file}")
-    except RuntimeError as e:
-        logger.debug(f"Problem working on {from_file}: {e}")
+    if file_xmp == {}:
+        raise ValueError("Loaded XMP could not be reloaded for {from_file}")
+
+
+def check_drop_modify(file_to_modify, xmp_to_clean):
+    extra_keys_to_drop = []
+
+    with pyexiv2.Image(file_to_modify.as_posix()) as img:
+        img_xmp = img.read_xmp()
+
+        for k, v in img_xmp.items():
+            if v in ['type="Struct"', 'type="Seq"']:
+                extra_keys_to_drop.append(k)
+
+        # drop fields if anything was identified
+        if len(extra_keys_to_drop) > 0:
+            drop_fields(xmp_to_clean, extra_keys=extra_keys_to_drop)
+
+        img.modify_xmp(xmp_to_clean)
 
 
 def extend_xmp(base: pyexiv2.core.Image, xmp_file: pathlib.PosixPath):
@@ -129,6 +181,7 @@ def extend_xmp(base: pyexiv2.core.Image, xmp_file: pathlib.PosixPath):
 
     # update xmp data
     if count > 0:
+        logger.warning(f"fixing xmp")
         base.modify_xmp(_fix_xmp(file_xmp))
     else:
         base.modify_xmp(file_xmp)
@@ -190,9 +243,9 @@ def drop_fields(xmp_dict: dict, extra_keys: list = None):
     # return xmp_dict
 
 
-def process_file(data_series):
+def process_file(data_series, et):
 
-    path_from_root = data_series.loc["PathFromRoot"]
+    data_series.loc["PathFromRoot"]
     temp_path = data_series.loc["BaseName"] + "." + data_series.loc["FileType"]
     lr_xmp_path = data_series.loc["BaseName"] + ".xmp"
     darktable_xmp_path = (
@@ -225,10 +278,8 @@ def process_file(data_series):
         "sidecar_darktable": pathlib.Path(temp_dir_path, "sidecar.ext.xmp"),
     }
 
-    # temporarilty change the log level to allow reading of the xmp data
-    pyexiv2.set_log_level(4)
     # Create temp files from extracted data
-    copy_xmp_temp(filepath, temp_files["orig"])
+    copy_xmp_temp(filepath, temp_files["orig"], et=et)
 
     # write database XMP to temp
     with open(temp_files["db"], "w") as f:
@@ -236,11 +287,8 @@ def process_file(data_series):
 
     # try sidecar files
     # # TODO: case insensitive implementation
-    copy_xmp_temp(filepath_lr_xmp, temp_files["sidecar_lr"])
-    copy_xmp_temp(filepath_darktable_xmp, temp_files["sidecar_darktable"])
-
-    # change back to normal log level to observe xmp updating
-    pyexiv2.set_log_level(1)
+    copy_xmp_temp(filepath_lr_xmp, temp_files["sidecar_lr"], et=et)
+    copy_xmp_temp(filepath_darktable_xmp, temp_files["sidecar_darktable"], et=et)
 
     # prepare data from database for stacking
     intersect_dict = parse_lightroom_processtext(
@@ -288,30 +336,12 @@ def process_file(data_series):
     if filepath_lr_xmp.is_file():
         # update
         # copy data back to LR format file
-        with pyexiv2.Image(filepath_lr_xmp.as_posix()) as img:
-            # read in the xmp from final file to check for tags that cannot be overwritten
-            img_xmp = img.read_xmp()
-            extra_keys_to_drop = []
-            for k, v in img_xmp.items():
-                if v in ['type="Struct"', 'type="Seq"']:
-                    extra_keys_to_drop.append(k)
+        check_drop_modify(file_to_modify=filepath_lr_xmp, xmp_to_clean=combined_xmp)
 
-            # drop fields if anything was identified
-            if len(extra_keys_to_drop) > 0:
-                drop_fields(combined_xmp, extra_keys=extra_keys_to_drop)
-
-            # modify the file with the updated dictionary
-            img.modify_xmp(combined_xmp)
-            # for xmp_key, xmp_val in combined_xmp.items():
-            #     img.modify_xmp({xmp_key: xmp_val})
         logger.debug(f"updated {filepath_lr_xmp}")
     else:
 
-        new_xmp = pyexiv2.Image(temp_files["orig"].as_posix())
-
-        new_xmp.modify_xmp(combined_xmp)
-
-        new_xmp.close()
+        check_drop_modify(file_to_modify=temp_files["orig"], xmp_to_clean=combined_xmp)
 
         # copy "original" as this is the file corresponding to new_xmp
         shutil.copy(temp_files["orig"], filepath_lr_xmp)
@@ -362,24 +392,35 @@ def process_file(data_series):
             #         "Exif.Image.Orientation": file_exif["Exif.Image.Orientation"],
             #     }
 
-            # crop_set = {
-            #     "CropTop",
-            #     "CropRight",
-            #     "CropLeft",
-            #     "CropBottom",
-            #     "CropAngle",
-            # }
+            # fix_crop
+            final_fix = {}
+            if "CropTop" in required_fields:
+                final_fix["Xmp.crs.CropTop"] = 0.0
+            if "CropRight" in required_fields:
+                final_fix["Xmp.crs.CropRight"] = 1.0
+            if "CropLeft" in required_fields:
+                final_fix["Xmp.crs.CropLeft"] = 0.0
+            if "CropBottom" in required_fields:
+                final_fix["Xmp.crs.CropBottom"] = 1.0
+            if "CropAngle" in required_fields:
+                final_fix["Xmp.crs.CropAngle"] = 0.0
+            logger.error(f"Final_XMP - Fixed: {final_fix.keys()}")
+
+            final_xmp.modify_xmp(final_fix)
+
+    final_xmp.close()
 
     # clean up temp folder:
     tempdir.cleanup()
 
 
 def main():
+    with ExifTool() as et:
     for i, data_series in df.iterrows():
         logger.info(
             f"Index: {i}, name: {data_series.loc['PathFromRoot']}{data_series.loc['BaseName']}"
         )
-        process_file(data_series)
+            process_file(data_series=data_series, et=et)
 
 
 if __name__ == "__main__":
