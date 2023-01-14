@@ -36,15 +36,35 @@ with importlib.resources.files("tags").joinpath("tags_from_darktable.txt").open(
     tags = f.read().splitlines()
 
 # test query of the view created in img_view.sql
+# limit this to only those filetypes supported by DarkTable
+# https://docs.darktable.org/usermanual/development/en/overview/supported-file-formats/
 sql_query = """
-select * from IMG
-WHERE baseName like 'Crystal-0075%'
-or baseName like 'Crystals-1600%'
-or baseName like 'London-3471%'
-or baseName like 'LWP42267%'
-or baseName like 'wedding 583%'
+select *
+from IMG
+WHERE 
+    --(
+    --baseName like 'Crystal-0075%'
+    --or baseName like 'Crystals-1600%'
+    --or baseName like 'London-3471%'
+    --or baseName like 'LWP42267%'
+    --or baseName like 'wedding 583%'
+    --or baseName like 'Star Trails-4%'
+    --) 
+    (PathFromRoot like '2013%' or PathFromRoot like '2014%')
+    and 
+    upper(FileType) in (
+    -- Regular formats
+    '3FR', 'ARI', 'ARW', 'BAY', 'BMQ', 'CAP', 'CINE', 'CR2', 'CR3', 'CRW',
+    'CS1', 'DC2', 'DCR', 'DNG', 'GPR', 'ERF', 'FFF', 'EXR', 'IA', 'IIQ',
+    'JPEG', 'JPG', 'K25', 'KC2', 'KDC', 'MDC', 'MEF', 'MOS', 'MRW', 'NEF',
+    'NRW', 'ORF', 'PEF', 'PFM', 'PNG', 'PXN', 'QTK', 'RAF', 'RAW', 'RDC',
+    'RW1', 'RW2', 'SR2', 'SRF', 'SRW', 'STI', 'TIF', 'TIFF', 'X3F',
+    -- Extended Formats
+    'J2C', 'J2K', 'JP2', 'JPC',
+    'BMP', 'DCM', 'GIF', 'JNG', 'JPC', 'JP2', 'MIFF',
+    'MNG', 'PBM', 'PGM', 'PNM', 'PPM', 'WEBP'
+    )
 """
-# where (PathFromRoot like '2013%' or PathFromRoot like '2014%')
 
 # Creating the path to the lightroom catalog
 catalog = importlib.resources.files("untracked").joinpath("LightroomCatalog.lrcat")
@@ -131,7 +151,9 @@ def copy_xmp_temp(
         return
 
     # run exiftool command on file to return xmp string
-    file_raw_xmp = et.execute(*["-xmp", "-b", str(from_file.as_posix())])
+    file_raw_xmp = et.execute(
+        *["-xmp", "-b", str(from_file.as_posix()), "-api", "LargeFileSupport=1"]
+    )
     # strip null characters common in some languages
     file_raw_xmp = file_raw_xmp.strip("\x00")
     if file_raw_xmp == "":
@@ -245,7 +267,7 @@ def drop_fields(xmp_dict: dict, extra_keys: list = None):
 
 def process_file(data_series, et, update_file: bool = True):
 
-    data_series.loc["PathFromRoot"]
+    path_from_root = data_series.loc["PathFromRoot"]
     temp_path = data_series.loc["BaseName"] + "." + data_series.loc["FileType"]
     lr_xmp_path = data_series.loc["BaseName"] + ".xmp"
     darktable_xmp_path = (
@@ -428,7 +450,7 @@ def main():
     with ExifTool() as et:
     for i, data_series in df.iterrows():
         logger.info(
-            f"Index: {i}, name: {data_series.loc['PathFromRoot']}{data_series.loc['BaseName']}"
+                f"Index: {i}, name: {data_series.loc['PathFromRoot']}{data_series.loc['BaseName']}.{data_series.loc['FileType']}"
         )
             process_file(data_series=data_series, et=et, update_file=False)
 
