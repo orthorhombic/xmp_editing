@@ -243,7 +243,7 @@ def drop_fields(xmp_dict: dict, extra_keys: list = None):
     # return xmp_dict
 
 
-def process_file(data_series, et):
+def process_file(data_series, et, update_file: bool = True):
 
     data_series.loc["PathFromRoot"]
     temp_path = data_series.loc["BaseName"] + "." + data_series.loc["FileType"]
@@ -333,6 +333,8 @@ def process_file(data_series, et):
     # apply fixes to ensure clean write
     # new_xmp_dict = _fix_xmp(new_xmp_dict)
 
+    if update_file:
+        # only execute updates if not in No-Op Mode
     if filepath_lr_xmp.is_file():
         # update
         # copy data back to LR format file
@@ -341,7 +343,9 @@ def process_file(data_series, et):
         logger.debug(f"updated {filepath_lr_xmp}")
     else:
 
-        check_drop_modify(file_to_modify=temp_files["orig"], xmp_to_clean=combined_xmp)
+            check_drop_modify(
+                file_to_modify=temp_files["orig"], xmp_to_clean=combined_xmp
+            )
 
         # copy "original" as this is the file corresponding to new_xmp
         shutil.copy(temp_files["orig"], filepath_lr_xmp)
@@ -355,6 +359,10 @@ def process_file(data_series, et):
     #         ImageWidth
     #         ImageLength
     #         Orientation
+
+    if not filepath.is_file() and not update_file:
+        logger.debug(f"No-Op Mode: File {filepath} not found to check")
+        return
 
     final_xmp_dict = final_xmp.read_xmp()
 
@@ -379,7 +387,7 @@ def process_file(data_series, et):
             required_fields.discard(short_key)
 
         if len(required_fields) > 0:
-            logger.error(f"Final_XMP - Missing required fields: {required_fields}")
+            logger.warning(f"Final_XMP - Missing required fields: {required_fields}")
 
             # # fix exif data
             # exif_set = {"ImageWidth", "ImageLength", "Orientation"}
@@ -404,9 +412,11 @@ def process_file(data_series, et):
                 final_fix["Xmp.crs.CropBottom"] = 1.0
             if "CropAngle" in required_fields:
                 final_fix["Xmp.crs.CropAngle"] = 0.0
-            logger.error(f"Final_XMP - Fixed: {final_fix.keys()}")
 
+            # disable update in No-Op Mode
+            if update_file:
             final_xmp.modify_xmp(final_fix)
+                logger.error(f"Final_XMP - Fixed: {final_fix.keys()}")
 
     final_xmp.close()
 
@@ -420,7 +430,7 @@ def main():
         logger.info(
             f"Index: {i}, name: {data_series.loc['PathFromRoot']}{data_series.loc['BaseName']}"
         )
-            process_file(data_series=data_series, et=et)
+            process_file(data_series=data_series, et=et, update_file=False)
 
 
 if __name__ == "__main__":
