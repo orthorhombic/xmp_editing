@@ -196,30 +196,6 @@ def check_drop_modify(file_to_modify, xmp_to_clean):
         img.modify_xmp(xmp_to_clean)
 
 
-def extend_xmp(base: pyexiv2.core.Image, xmp_file: pathlib.PosixPath):
-
-    with pyexiv2.Image(xmp_file.as_posix()) as img:
-        file_xmp = img.read_xmp()
-
-    # TODO: need to drop bad tags like "Xmp.xmpMM.History[x]"
-    # history tags cannot be updated per documentation: https://github.com/LeoHsiao1/pyexiv2/blob/master/docs/Tutorial.md
-    # when reading in this or anything with ", " in them, it gets messed up
-    count = 0
-    for k, v in file_xmp.items():
-        if "," in v:
-            logger.warning(f"found problematic key/value: {k}: {v}")
-            count += 1
-
-    # update xmp data
-    if count > 0:
-        logger.warning(f"fixing xmp")
-        base.modify_xmp(_fix_xmp(file_xmp))
-    else:
-        base.modify_xmp(file_xmp)
-
-    # return base
-
-
 def extract_xmp(xmp_file: pathlib.PosixPath) -> dict:
     with pyexiv2.Image(xmp_file.as_posix()) as img:
         file_xmp = img.read_xmp()
@@ -228,27 +204,12 @@ def extract_xmp(xmp_file: pathlib.PosixPath) -> dict:
     return file_xmp
 
 
-ARRAY_IDX_PATTERN = re.compile(r"\[\d+\]")
-
-# from https://github.com/pyinat/naturtag/pull/169/files
-
-
-def _fix_xmp(xmp):
-    """Fix some invalid XMP tags"""
-    for k, v in xmp.items():
-        # Flatten dict values, like {'lang="x-default"': value} -> value
-        if isinstance(v, dict):
-            xmp[k] = list(v.values())[0]
-        # XMP won't accept both a single value and an array with the same key
-        if k.endswith("]") and (nonarray_key := ARRAY_IDX_PATTERN.sub("", k)) in xmp:
-            xmp[nonarray_key] = None
-    xmp = {k: v for k, v in xmp.items() if v is not None}
-    return xmp
-
-
 def drop_fields(xmp_dict: dict, extra_keys: list = None):
     """Operates in place on the provided XMP dictionary to remove problematic entries.
     These include accompanying tags for anything with 'type="Struct"' or 'type="Seq"'
+    Drop bad tags like "Xmp.xmpMM.History[x]"
+    # history tags cannot be updated per documentation: https://github.com/LeoHsiao1/pyexiv2/blob/master/docs/Tutorial.md
+    # when reading in this or anything with ", " in them, it gets messed up
     """
     keys_list = list(xmp_dict.keys())
     bad_keys = []
