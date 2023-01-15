@@ -171,12 +171,12 @@ def copy_xmp_temp(
         # logger.debug(f"Problem working on {from_file}: {e}")
         file_raw_xmp = empty_xml
 
-        # write data to temp
-        with open(to_file, "w") as f:
-            f.write(file_raw_xmp)
+    # write data to temp
+    with open(to_file, "w") as f:
+        f.write(file_raw_xmp)
     # confirm the raw xmp can be opened - this requires the log level is not at 4 (muted)
-        with pyexiv2.Image(to_file.as_posix()) as img:
-            file_xmp = img.read_xmp()
+    with pyexiv2.Image(to_file.as_posix()) as img:
+        file_xmp = img.read_xmp()
 
 
 def check_drop_modify(file_to_modify, xmp_to_clean):
@@ -274,6 +274,56 @@ def drop_fields(xmp_dict: dict, extra_keys: list = None):
     # return xmp_dict
 
 
+def check_crop_fields(xmp_dict: dict):
+    if str(xmp_dict.get("Xmp.crs.HasCrop")).lower() == "true":
+        required_fields = {
+            "CropTop",
+            "CropRight",
+            "CropLeft",
+            "CropBottom",
+            "CropAngle",
+            "ImageWidth",
+            "ImageLength",
+            "Orientation",
+        }
+        for key in xmp_dict.keys():
+            short_key = key.split(".")[-1]
+            required_fields.discard(short_key)
+
+        if len(required_fields) > 0:
+            logger.debug(f"XMP - Missing required crop fields: {required_fields}")
+            return required_fields
+
+    # return empty set if no problems
+    return set()
+
+
+def crop_fields_from_missing(missing_fields: dict):
+    # look for crop fields in the provided xmp and return a dictionary of the missing fields
+    crop_fix = {}
+
+    crop_fields = {
+        "CropTop",
+        "CropRight",
+        "CropLeft",
+        "CropBottom",
+        "CropAngle",
+    }
+
+    if "CropTop" in missing_fields:
+        crop_fix["Xmp.crs.CropTop"] = 0.0
+    if "CropRight" in missing_fields:
+        crop_fix["Xmp.crs.CropRight"] = 1.0
+    if "CropLeft" in missing_fields:
+        crop_fix["Xmp.crs.CropLeft"] = 0.0
+    if "CropBottom" in missing_fields:
+        crop_fix["Xmp.crs.CropBottom"] = 1.0
+    if "CropAngle" in missing_fields:
+        crop_fix["Xmp.crs.CropAngle"] = 0.0
+
+    return crop_fix
+
+
 def process_file(data_series, et, update_file: bool = True):
 
     path_from_root = data_series.loc["PathFromRoot"]
@@ -293,7 +343,7 @@ def process_file(data_series, et, update_file: bool = True):
 
     # check the file first, abort if it isn't there
     if not filepath.is_file():
-        logger.warning(f"File {filepath} not found")
+        logger.error(f"File {filepath} not found")
         return
 
     # set up temp folder in tmpfs to keep it in memory
@@ -319,7 +369,11 @@ def process_file(data_series, et, update_file: bool = True):
     # try sidecar files
     # # TODO: case insensitive implementation
     copy_xmp_temp(filepath_lr_xmp, temp_files["sidecar_lr"], et=et)
-    copy_xmp_temp(filepath_darktable_xmp, temp_files["sidecar_darktable"], et=et)
+    if filepath_darktable_xmp.is_file():
+        logger.warning(
+            f"DarkTable XMP Exists: Lightroom data will not be imported: {filepath_darktable_xmp}"
+        )
+        copy_xmp_temp(filepath_darktable_xmp, temp_files["sidecar_darktable"], et=et)
 
     # prepare data from database for stacking
     intersect_dict = parse_lightroom_processtext(
@@ -361,26 +415,33 @@ def process_file(data_series, et, update_file: bool = True):
         combined_xmp[field_to_delete] = None
         logger.info(f"Problematic XMP: {field_to_delete} deleted")
 
-    # apply fixes to ensure clean write
-    # new_xmp_dict = _fix_xmp(new_xmp_dict)
+    # before saving changes, check state of crop metadata
+    required_fields = check_crop_fields(xmp_dict=combined_xmp)
+    if len(required_fields) > 0:
+        # create dictionary for missing fields
+        crop_fix = crop_fields_from_missing(required_fields)
+
+        if len(crop_fix) > 0:
+            combined_xmp.update(crop_fix)
+            logger.debug(f"Crop Data - Fixed: {crop_fix.keys()}")
 
     if update_file:
         # only execute updates if not in No-Op Mode
-    if filepath_lr_xmp.is_file():
-        # update
-        # copy data back to LR format file
-        check_drop_modify(file_to_modify=filepath_lr_xmp, xmp_to_clean=combined_xmp)
+        if filepath_lr_xmp.is_file():
+            # update
+            # copy data back to LR format file
+            check_drop_modify(file_to_modify=filepath_lr_xmp, xmp_to_clean=combined_xmp)
 
-        logger.debug(f"updated {filepath_lr_xmp}")
-    else:
+            logger.debug(f"updated {filepath_lr_xmp}")
+        else:
 
             check_drop_modify(
                 file_to_modify=temp_files["orig"], xmp_to_clean=combined_xmp
             )
 
-        # copy "original" as this is the file corresponding to new_xmp
-        shutil.copy(temp_files["orig"], filepath_lr_xmp)
-        logger.debug(f"copied file to {filepath_lr_xmp}")
+            # copy "original" as this is the file corresponding to new_xmp
+            shutil.copy(temp_files["orig"], filepath_lr_xmp)
+            logger.debug(f"copied file to {filepath_lr_xmp}")
 
     final_xmp = pyexiv2.Image(filepath_lr_xmp.as_posix())
 
@@ -402,52 +463,30 @@ def process_file(data_series, et, update_file: bool = True):
     if label == "None" and update_file:
         logger.error(f"Final_XMP - Problematic Label: None")
 
-    if str(final_xmp_dict.get("Xmp.crs.HasCrop")).lower() == "true":
-        required_fields = {
-            "CropTop",
-            "CropRight",
-            "CropLeft",
-            "CropBottom",
-            "CropAngle",
-            "ImageWidth",
-            "ImageLength",
-            "Orientation",
-        }
-        for key in final_xmp_dict.keys():
-            short_key = key.split(".")[-1]
-            required_fields.discard(short_key)
+    # check for all crop fields and alert. try one more time to fix
+    required_fields = check_crop_fields(xmp_dict=final_xmp_dict)
 
-        if len(required_fields) > 0:
-            logger.warning(f"Final_XMP - Missing required fields: {required_fields}")
+    if len(required_fields) > 0:
+        logger.warning(f"Final_XMP - Missing required fields: {required_fields}")
 
-            # # fix exif data
-            # exif_set = {"ImageWidth", "ImageLength", "Orientation"}
-            # if len(required_fields.intersection(exif_set)) > 0:
-            #     with pyexiv2.Image(filepath.as_posix()) as img:
-            #         file_exif = img.read_exif()
-            #     exif_update = {
-            #         "Exif.Image.ImageWidth": file_exif["Exif.Image.ImageWidth"],
-            #         "Exif.Image.ImageLength": file_exif["Exif.Image.ImageLength"],
-            #         "Exif.Image.Orientation": file_exif["Exif.Image.Orientation"],
-            #     }
+        # # fix exif data
+        # exif_set = {"ImageWidth", "ImageLength", "Orientation"}
+        # if len(required_fields.intersection(exif_set)) > 0:
+        #     with pyexiv2.Image(filepath.as_posix()) as img:
+        #         file_exif = img.read_exif()
+        #     exif_update = {
+        #         "Exif.Image.ImageWidth": file_exif["Exif.Image.ImageWidth"],
+        #         "Exif.Image.ImageLength": file_exif["Exif.Image.ImageLength"],
+        #         "Exif.Image.Orientation": file_exif["Exif.Image.Orientation"],
+        #     }
 
-            # fix_crop
-            final_fix = {}
-            if "CropTop" in required_fields:
-                final_fix["Xmp.crs.CropTop"] = 0.0
-            if "CropRight" in required_fields:
-                final_fix["Xmp.crs.CropRight"] = 1.0
-            if "CropLeft" in required_fields:
-                final_fix["Xmp.crs.CropLeft"] = 0.0
-            if "CropBottom" in required_fields:
-                final_fix["Xmp.crs.CropBottom"] = 1.0
-            if "CropAngle" in required_fields:
-                final_fix["Xmp.crs.CropAngle"] = 0.0
+        # create dictionary for missing fields
+        crop_fix = crop_fields_from_missing(required_fields)
 
-            # disable update in No-Op Mode
-            if update_file:
-            final_xmp.modify_xmp(final_fix)
-                logger.error(f"Final_XMP - Fixed: {final_fix.keys()}")
+        # disable update in No-Op Mode
+        if update_file and len(crop_fix) > 0:
+            final_xmp.modify_xmp(crop_fix)
+            logger.warning(f"Final_XMP - Fixed: {crop_fix.keys()}")
 
     final_xmp.close()
 
@@ -457,10 +496,10 @@ def process_file(data_series, et, update_file: bool = True):
 
 def main():
     with ExifTool() as et:
-    for i, data_series in df.iterrows():
-        logger.info(
+        for i, data_series in df.iterrows():
+            logger.info(
                 f"Index: {i}, name: {data_series.loc['PathFromRoot']}{data_series.loc['BaseName']}.{data_series.loc['FileType']}"
-        )
+            )
             process_file(data_series=data_series, et=et, update_file=False)
 
 
