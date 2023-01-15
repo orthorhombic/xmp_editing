@@ -221,12 +221,7 @@ def drop_fields(xmp_dict: dict, extra_keys: list = None):
             bad_keys.append(k)
 
     for key in bad_keys:
-        # key="Xmp.xmpMM.History[1]"
-        # r = re.compile(key+".*")
-        # bad_key_iterator = filter(r.match, keys_list)
-
         bad_temp = [x for x in keys_list if x.startswith(key)]
-        # print(f" from {key}, dropping: ", list(bad_temp))
         drop_set.update(bad_temp)
 
     # drop everything from the set
@@ -243,6 +238,8 @@ def check_crop_fields(xmp_dict: dict):
             "CropLeft",
             "CropBottom",
             "CropAngle",
+            # Note: While testing indicates the below image width/length/orientation
+            # are needed, no missing tags have been observed.
             "ImageWidth",
             "ImageLength",
             "Orientation",
@@ -406,13 +403,6 @@ def process_file(data_series, et, update_file: bool = True):
 
     final_xmp = pyexiv2.Image(filepath_lr_xmp.as_posix())
 
-    # need check to confirm there is an exif block with resolution in it
-    # if HasCrop:
-    #     needs:
-    #         ImageWidth
-    #         ImageLength
-    #         Orientation
-
     if not filepath.is_file() and not update_file:
         logger.debug(f"No-Op Mode: File {filepath} not found to check")
         return
@@ -429,17 +419,6 @@ def process_file(data_series, et, update_file: bool = True):
 
     if len(required_fields) > 0:
         logger.warning(f"Final_XMP - Missing required fields: {required_fields}")
-
-        # # fix exif data
-        # exif_set = {"ImageWidth", "ImageLength", "Orientation"}
-        # if len(required_fields.intersection(exif_set)) > 0:
-        #     with pyexiv2.Image(filepath.as_posix()) as img:
-        #         file_exif = img.read_exif()
-        #     exif_update = {
-        #         "Exif.Image.ImageWidth": file_exif["Exif.Image.ImageWidth"],
-        #         "Exif.Image.ImageLength": file_exif["Exif.Image.ImageLength"],
-        #         "Exif.Image.Orientation": file_exif["Exif.Image.Orientation"],
-        #     }
 
         # create dictionary for missing fields
         crop_fix = crop_fields_from_missing(required_fields)
