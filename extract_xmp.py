@@ -465,7 +465,7 @@ def main():
                 logger.error(
                     f"Failed to process: {data_series.loc['PathFromRoot']}{data_series.loc['BaseName']}.{data_series.loc['FileType']}"
                 )
-                logger.error(f"Traceback: {e}")
+                logger.error(f"Exception: {e}")
 
 
 if __name__ == "__main__":
