@@ -13,8 +13,8 @@ from exiftool import ExifTool
 from logzero import logger
 from slpp import slpp as lua
 
-# NOTE: After import into darktable, the metadata "refresh EXIF" button needs to be pressed
-# This will sync the database with the new darktable xmp files
+# NOTE: After import into darktable, the metadata "write sidecar files" button needs to be pressed
+# This will write from the database (including imported Lightroom date) to the new darktable xmp files
 
 pyexiv2.set_log_level(1)
 logzero.logfile("rotating-logfile.log", maxBytes=1e8, backupCount=3)
