@@ -27,6 +27,7 @@ with open(config) as c_file:
 
 root_path = pathlib.Path(config_data["root_path"])
 update_file = config_data["update_file"]
+catalog_file = config_data["catalog_file"]
 
 empty_xml = """<x:xmpmeta xmlns:x="adobe:ns:meta/" x:xmptk="XMP Core 5.5.0">
  <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
@@ -87,6 +88,34 @@ df = pd.read_sql_query(sql_query, cnx)
 cnx.close()
 
 
+def reprocess_tuples(xmp_dict: dict) -> None:
+
+    keys_of_interest = {
+        "Xmp.crs.ToneCurvePV2012",
+        "Xmp.crs.ToneCurve",
+        "Xmp.crs.ToneCurveRed",
+        "Xmp.crs.ToneCurveBlue",
+        "Xmp.crs.ToneCurveGreen",
+    }
+    keys_set = set(xmp_dict.keys())
+    keys_to_fix = keys_of_interest.intersection(keys_set)
+
+    # based on the darktable code, it looks like this is expected to be a list of tuples/lists
+    for key in keys_to_fix:
+        temp_list = xmp_dict[key]
+        if len(temp_list) % 2 == 1:
+            raise ValueError(f"Unexpected length of {key}")
+
+        new_list = []
+        for i in range(len(temp_list) // 2):
+            # pyexiv2 uses ", " as a separator for multiple values.
+            # So it might automatically split the string you want to write.
+            # https://github.com/LeoHsiao1/pyexiv2/blob/master/docs/Tutorial.md
+            new_list.append(f"{temp_list[2*i]}, {temp_list[2*i+1]}")
+
+        xmp_dict[key] = new_list
+
+
 def parse_lightroom_processtext(
     lightroom_processtext: str, tags: list[str], process_ver: str
 ):
@@ -105,20 +134,10 @@ def parse_lightroom_processtext(
     tagintersect = set(tags).intersection(set(data.keys()))
     intersect_dict = {f"Xmp.crs.{k}": data[k] for k in tagintersect}
 
-    if "Xmp.crs.ToneCurvePV2012" in intersect_dict.keys():
-        # based on the darktable code, it looks like this is expected to be a list of tuples/lists
-        temp_list = intersect_dict["Xmp.crs.ToneCurvePV2012"]
-        if len(temp_list) % 2 == 1:
-            raise ValueError("Unexpected length of ToneCurvePV2012")
+    # Find keys that need to be reprocessed
+    intersect_dict.keys()
 
-        new_list = []
-        for i in range(len(temp_list) // 2):
-            # pyexiv2 uses ", " as a separator for multiple values.
-            # So it might automatically split the string you want to write.
-            # https://github.com/LeoHsiao1/pyexiv2/blob/master/docs/Tutorial.md
-            new_list.append(f"{temp_list[2*i]},{temp_list[2*i+1]}")
-
-        intersect_dict["Xmp.crs.ToneCurvePV2012"] = new_list
+    # reprocessing of the tone curve tuples will be handled right before updating xmp to avoid duplicate processing
 
     # keep process version for future reference, though this does not
     # appear to be used by darktable.
@@ -189,7 +208,7 @@ def check_drop_modify(file_to_modify, xmp_to_clean):
         img_xmp = img.read_xmp()
 
         for k, v in img_xmp.items():
-            if v in ['type="Struct"', 'type="Seq"']:
+            if v in ['type="Struct"', 'type="Seq"', 'type="Bag"']:
                 extra_keys_to_drop.append(k)
 
         # drop fields if anything was identified
@@ -358,6 +377,9 @@ def process_file(data_series, et, update_file: bool = True):
 
     check_and_set_crop(combined_xmp)
 
+    # fix any issues with tonecurves in them
+    reprocess_tuples(combined_xmp)
+
     # if the label is none, remove it. This would otherwise get set as a purple label
     # field set to none so if modifying existing file the field is removed
     # to be successful, this must be applied after doing any "fixes" on the xmp
@@ -437,7 +459,13 @@ def main():
             logger.info(
                 f"Index: {i}, name: {data_series.loc['PathFromRoot']}{data_series.loc['BaseName']}.{data_series.loc['FileType']}"
             )
+            try:
             process_file(data_series=data_series, et=et, update_file=update_file)
+            except Exception as e:
+                logger.error(
+                    f"Failed to process: {data_series.loc['PathFromRoot']}{data_series.loc['BaseName']}.{data_series.loc['FileType']}"
+                )
+                logger.error(f"Traceback: {e}")
 
 
 if __name__ == "__main__":
