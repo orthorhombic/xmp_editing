@@ -59,7 +59,7 @@ WHERE
     --or baseName like 'Star Trails-4%'
     --or baseName like 'Na3Bi-111345%'
     --) 
-    (PathFromRoot like '2013%' or PathFromRoot like '2014%')
+    (PathFromRoot like '2006%' or PathFromRoot like '2021%' or PathFromRoot like '2013%' or PathFromRoot like '2014%')
     and 
     upper(FileType) in (
     -- Regular formats
@@ -103,19 +103,6 @@ def parse_lightroom_processtext(
 
     tagintersect = set(tags).intersection(set(data.keys()))
     intersect_dict = {f"Xmp.crs.{k}": data[k] for k in tagintersect}
-    required_crop_fields = {
-        "Xmp.crs.CropTop",
-        "Xmp.crs.CropRight",
-        "Xmp.crs.CropLeft",
-        "Xmp.crs.CropBottom",
-        "Xmp.crs.CropAngle",
-    }
-    intersection_size = len(
-        required_crop_fields.intersection(set(intersect_dict.keys()))
-    )
-    # if any crop fields are specified, set the crop attribute to True
-    if intersection_size > 0:
-        intersect_dict["Xmp.crs.HasCrop"] = "True"
 
     if "Xmp.crs.ToneCurvePV2012" in intersect_dict.keys():
         # based on the darktable code, it looks like this is expected to be a list of tuples/lists
@@ -141,6 +128,21 @@ def parse_lightroom_processtext(
         intersect_dict["Xmp.crs.ProcessVersion"] = process_ver
 
     return intersect_dict
+
+
+def check_and_set_crop(xmp_dict: dict) -> None:
+    required_crop_fields = {
+        "Xmp.crs.CropTop",
+        "Xmp.crs.CropRight",
+        "Xmp.crs.CropLeft",
+        "Xmp.crs.CropBottom",
+        "Xmp.crs.CropAngle",
+    }
+    intersection_size = len(required_crop_fields.intersection(set(xmp_dict.keys())))
+    # if any crop fields are specified, set the crop attribute to True
+    if intersection_size > 0:
+        xmp_dict["Xmp.crs.HasCrop"] = "True"
+        logger.debug("Set HasCrop")
 
 
 def copy_xmp_temp(
@@ -208,8 +210,8 @@ def drop_fields(xmp_dict: dict, extra_keys: list = None):
     """Operates in place on the provided XMP dictionary to remove problematic entries.
     These include accompanying tags for anything with 'type="Struct"' or 'type="Seq"'
     Drop bad tags like "Xmp.xmpMM.History[x]"
-    # history tags cannot be updated per documentation: https://github.com/LeoHsiao1/pyexiv2/blob/master/docs/Tutorial.md
-    # when reading in this or anything with ", " in them, it gets messed up
+    history tags cannot be updated per documentation: https://github.com/LeoHsiao1/pyexiv2/blob/master/docs/Tutorial.md
+    when reading in this or anything with ", " in them, it gets messed up
     """
     keys_list = list(xmp_dict.keys())
     bad_keys = []
@@ -238,7 +240,7 @@ def check_crop_fields(xmp_dict: dict):
             "CropLeft",
             "CropBottom",
             "CropAngle",
-            # Note: While testing indicates the below image width/length/orientation
+            # NOTE: While testing indicates the below image width/length/orientation
             # are needed, no missing tags have been observed.
             "ImageWidth",
             "ImageLength",
@@ -259,14 +261,6 @@ def check_crop_fields(xmp_dict: dict):
 def crop_fields_from_missing(missing_fields: dict):
     # look for crop fields in the provided xmp and return a dictionary of the missing fields
     crop_fix = {}
-
-    crop_fields = {
-        "CropTop",
-        "CropRight",
-        "CropLeft",
-        "CropBottom",
-        "CropAngle",
-    }
 
     if "CropTop" in missing_fields:
         crop_fix["Xmp.crs.CropTop"] = 0.0
@@ -361,9 +355,11 @@ def process_file(data_series, et, update_file: bool = True):
     # add data from database
     combined_xmp.update(intersect_dict)
 
+    check_and_set_crop(combined_xmp)
+
     # if the label is none, remove it. This would otherwise get set as a purple label
     # field set to none so if modifying existing file the field is removed
-    # to bes successful, this must be applied after doing any "fixes" on the xmp
+    # to be successful, this must be applied after doing any "fixes" on the xmp
     field_to_delete = "Xmp.xmp.Label"
     if (
         field_to_delete in combined_xmp.keys()
@@ -386,7 +382,7 @@ def process_file(data_series, et, update_file: bool = True):
     if update_file:
         # only execute updates if not in No-Op Mode
         if filepath_lr_xmp.is_file():
-            # update
+            # updating file
             # copy data back to LR format file
             check_drop_modify(file_to_modify=filepath_lr_xmp, xmp_to_clean=combined_xmp)
 
@@ -440,7 +436,7 @@ def main():
             logger.info(
                 f"Index: {i}, name: {data_series.loc['PathFromRoot']}{data_series.loc['BaseName']}.{data_series.loc['FileType']}"
             )
-            process_file(data_series=data_series, et=et, update_file=False)
+            process_file(data_series=data_series, et=et, update_file=True)
 
 
 if __name__ == "__main__":
