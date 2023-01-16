@@ -18,6 +18,19 @@ Other fields can be added if they are present in `tags/crs_tags.txt` which is de
 Cleanup:
 Remove `<xmp:Label>None</xmp:Label>` because it evaluates to a purple label.
 
+## Requirements
+To function, this needs both exiv2 and exiftool installed. On Linux, this can be accomplished with apt:
+`sudo apt install exiv2`
+`sudo apt install exiftool`
+
+Create a folder called `untracked` and add `config.yml` with your desired configuration. An example is below:
+
+```yaml
+root_path: "/media/my_files"
+update_file: True
+```
+
+
 ## Todo:
 
 - Successfully generate a cropped image in darktable from a raw vuescan dng file.
@@ -25,7 +38,6 @@ Remove `<xmp:Label>None</xmp:Label>` because it evaluates to a purple label.
 - only write xmp file if base file exists in the expected directory
 - refine the sql query to avoid getting multiple rows if there are virtual copies
   - examine whether virtual copies could be carried over to Darktable
-  - otherwise
 - add logging to measure progress and throw warnings
 
 ## Immediate next steps:

@@ -26,6 +26,7 @@ with open(config) as c_file:
     config_data = yaml.load(c_file, Loader=yaml.SafeLoader)
 
 root_path = pathlib.Path(config_data["root_path"])
+update_file = config_data["update_file"]
 
 empty_xml = """<x:xmpmeta xmlns:x="adobe:ns:meta/" x:xmptk="XMP Core 5.5.0">
  <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
@@ -320,7 +321,7 @@ def process_file(data_series, et, update_file: bool = True):
 
     # try sidecar files
     # # TODO: case insensitive implementation
-    copy_xmp_temp(filepath_lr_xmp, temp_files["sidecar_lr"], et=et)
+    copy_xmp_temp(filepath_lr_xmp, temp_files["sidecar_lr"], et=et, warn=True)
     if filepath_darktable_xmp.is_file():
         logger.warning(
             f"DarkTable XMP Exists: Lightroom data will not be imported: {filepath_darktable_xmp}"
@@ -397,12 +398,12 @@ def process_file(data_series, et, update_file: bool = True):
             shutil.copy(temp_files["orig"], filepath_lr_xmp)
             logger.debug(f"copied file to {filepath_lr_xmp}")
 
-    final_xmp = pyexiv2.Image(filepath_lr_xmp.as_posix())
-
-    if not filepath.is_file() and not update_file:
-        logger.debug(f"No-Op Mode: File {filepath} not found to check")
+    if not filepath_lr_xmp.is_file() and not update_file:
+        logger.error(f"No-Op Mode: File {filepath} not found to check")
+        tempdir.cleanup()
         return
 
+    final_xmp = pyexiv2.Image(filepath_lr_xmp.as_posix())
     final_xmp_dict = final_xmp.read_xmp()
 
     # Final check of output file
@@ -436,7 +437,7 @@ def main():
             logger.info(
                 f"Index: {i}, name: {data_series.loc['PathFromRoot']}{data_series.loc['BaseName']}.{data_series.loc['FileType']}"
             )
-            process_file(data_series=data_series, et=et, update_file=True)
+            process_file(data_series=data_series, et=et, update_file=update_file)
 
 
 if __name__ == "__main__":
