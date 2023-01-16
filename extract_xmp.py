@@ -61,8 +61,8 @@ WHERE
     --or baseName like 'Star Trails-4%'
     --or baseName like 'Na3Bi-111345%'
     --) 
-    (PathFromRoot like '2006%' or PathFromRoot like '2021%' or PathFromRoot like '2013%' or PathFromRoot like '2014%')
-    and 
+    --(PathFromRoot like '2006%' or PathFromRoot like '2021%' or PathFromRoot like '2013%' or PathFromRoot like '2014%' or PathFromRoot like '2018%' or PathFromRoot like '2010%')
+    --and 
     upper(FileType) in (
     -- Regular formats
     '3FR', 'ARI', 'ARW', 'BAY', 'BMQ', 'CAP', 'CINE', 'CR2', 'CR3', 'CRW',
