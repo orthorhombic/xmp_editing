@@ -460,7 +460,7 @@ def main():
                 f"Index: {i}, name: {data_series.loc['PathFromRoot']}{data_series.loc['BaseName']}.{data_series.loc['FileType']}"
             )
             try:
-            process_file(data_series=data_series, et=et, update_file=update_file)
+                process_file(data_series=data_series, et=et, update_file=update_file)
             except Exception as e:
                 logger.error(
                     f"Failed to process: {data_series.loc['PathFromRoot']}{data_series.loc['BaseName']}.{data_series.loc['FileType']}"
