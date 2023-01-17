@@ -64,7 +64,7 @@ WHERE
     --) 
     --(PathFromRoot like '2006%' or PathFromRoot like '2021%' or PathFromRoot like '2013%' or PathFromRoot like '2014%' or PathFromRoot like '2018%' or PathFromRoot like '2010%')
     RootFolderName = '{RootFolderName}'
-    --and 
+    and 
     upper(FileType) in (
     -- Regular formats
     '3FR', 'ARI', 'ARW', 'BAY', 'BMQ', 'CAP', 'CINE', 'CR2', 'CR3', 'CRW',
