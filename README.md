@@ -18,7 +18,7 @@ Other fields can be added if they are present in `tags/crs_tags.txt` which is de
 Cleanup:
 Remove `<xmp:Label>None</xmp:Label>` because it evaluates to a purple label.
 
-## Requirements
+## Requirements/Running
 To function, this needs both exiv2 and exiftool installed. On Linux, this can be accomplished with apt:
 `sudo apt install exiv2`
 `sudo apt install exiftool`
@@ -26,8 +26,19 @@ To function, this needs both exiv2 and exiftool installed. On Linux, this can be
 Create a folder called `untracked` and add `config.yml` with your desired configuration. An example is below:
 
 ```yaml
-root_path: "/media/my_files"
+root_path: "/media/my_files/Image Library"
 update_file: True
+catalog_file: "LightroomCatalog.lrcat"
+RootFolderName: "Image Library"
+```
+
+The view described in `img_view.sql` must be created in the sqlite database (your catalog) before operation. Therefore it is recommended to make a separate copy in the `untracked` folder.
+
+Before running, you must also select a single root directory on which you want to operate. Populate this in the config.yml file as in the example.
+
+To run:
+```bash
+python extract_xmp.py
 ```
 
 

@@ -28,6 +28,7 @@ with open(config) as c_file:
 root_path = pathlib.Path(config_data["root_path"])
 update_file = config_data["update_file"]
 catalog_file = config_data["catalog_file"]
+RootFolderName = config_data["RootFolderName"]
 
 empty_xml = """<x:xmpmeta xmlns:x="adobe:ns:meta/" x:xmptk="XMP Core 5.5.0">
  <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
@@ -48,7 +49,7 @@ with importlib.resources.files("tags").joinpath("tags_from_darktable.txt").open(
 # test query of the view created in img_view.sql
 # limit this to only those filetypes supported by DarkTable
 # https://docs.darktable.org/usermanual/development/en/overview/supported-file-formats/
-sql_query = """
+sql_query = f"""
 select *
 from IMG
 WHERE 
@@ -62,6 +63,7 @@ WHERE
     --or baseName like 'Na3Bi-111345%'
     --) 
     --(PathFromRoot like '2006%' or PathFromRoot like '2021%' or PathFromRoot like '2013%' or PathFromRoot like '2014%' or PathFromRoot like '2018%' or PathFromRoot like '2010%')
+    RootFolderName = '{RootFolderName}'
     --and 
     upper(FileType) in (
     -- Regular formats
@@ -78,7 +80,7 @@ WHERE
 """
 
 # Creating the path to the lightroom catalog
-catalog = importlib.resources.files("untracked").joinpath("LightroomCatalog.lrcat")
+catalog = importlib.resources.files("untracked").joinpath(catalog_file)
 
 # Create your connection.
 cnx = sqlite3.connect(catalog)

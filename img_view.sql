@@ -3,6 +3,7 @@
 -- DROP VIEW Img
 CREATE VIEW Img AS
 SELECT
+AgLibraryRootFolder.absolutePath AS RootFolderPath,
 AgLibraryRootFolder.name AS RootFolderName,
 AgLibraryFolder.pathFromRoot AS PathFromRoot,
 AgLibraryFile.baseName AS BaseName,
