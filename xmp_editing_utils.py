@@ -1,10 +1,13 @@
 import pathlib
+
+import cv2
+import numpy as np
+import pyexiv2
 from exiftool import ExifTool
 from logzero import logger
-import pyexiv2
-import cv2
-from PIL import ImageChops, Image, ImageDraw, ImageStat, ImageFilter
-import numpy as np
+from PIL import Image
+from PIL import ImageDraw
+from PIL import ImageStat
 
 
 empty_xml = """<x:xmpmeta xmlns:x="adobe:ns:meta/" x:xmptk="XMP Core 5.5.0">
@@ -50,7 +53,7 @@ def copy_xmp_temp(
         f.write(file_raw_xmp)
     # confirm the raw xmp can be opened - this requires the log level is not at 4 (muted)
     with pyexiv2.Image(to_file.as_posix()) as img:
-        file_xmp = img.read_xmp()
+        img.read_xmp()
 
 
 def convert_to_binary(image, lower_threshold, upper_threshold):
@@ -100,3 +103,77 @@ def get_control_value(im, bbox):
     avg_list = ImageStat.Stat(control_img, mask=mask_layer).mean
     avg = round(sum(avg_list) / 3, 2)
     return avg
+
+
+raw_files = [".CRW", ".CR2", ".CR3", ".DNG", ".RAW"]
+
+other_files = [
+    # -- Regular formats
+    ".3FR",
+    ".ARI",
+    ".ARW",
+    ".BAY",
+    ".BMQ",
+    ".CAP",
+    ".CINE",
+    # ".CR2",
+    # ".CR3",
+    # ".CRW",
+    ".CS1",
+    ".DC2",
+    ".DCR",
+    # ".DNG",
+    ".GPR",
+    ".ERF",
+    ".FFF",
+    ".EXR",
+    ".IA",
+    ".IIQ",
+    ".JPEG",
+    ".JPG",
+    ".K25",
+    ".KC2",
+    ".KDC",
+    ".MDC",
+    ".MEF",
+    ".MOS",
+    ".MRW",
+    ".NEF",
+    ".NRW",
+    ".ORF",
+    ".PEF",
+    ".PFM",
+    ".PNG",
+    ".PXN",
+    ".QTK",
+    ".RAF",
+    # ".RAW",
+    ".RDC",
+    ".RW1",
+    ".RW2",
+    ".SR2",
+    ".SRF",
+    ".SRW",
+    ".STI",
+    ".TIF",
+    ".TIFF",
+    ".X3F",
+    # -- Extended Formats
+    ".J2C",
+    ".J2K",
+    ".JP2",
+    ".JPC",
+    ".BMP",
+    ".DCM",
+    ".GIF",
+    ".JNG",
+    ".JPC",
+    ".JP2",
+    ".MIFF",
+    ".MNG",
+    ".PBM",
+    ".PGM",
+    ".PNM",
+    ".PPM",
+    ".WEBP",
+]

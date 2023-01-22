@@ -33,9 +33,10 @@ config = importlib.resources.files("untracked").joinpath("crop_config.yml")
 with open(config) as c_file:
     config_data = yaml.load(c_file, Loader=yaml.SafeLoader)
 
-root_path = pathlib.Path(config_data["root_path"])
-debug = config_data["debug"]
-crop_addition = config_data["crop_addition"]
+root_path = pathlib.Path(config_data["root_path"])  # default "untracked"
+debug = config_data["debug"]  # default False
+crop_addition = config_data["crop_addition"]  # default -5
+threshold = config_data["threshold"]  # default 45
 
 if debug:
     debug_path = pathlib.Path(root_path, "debug")
@@ -51,7 +52,6 @@ def process_file(
 ):
 
     if filepath.suffix.upper() in xmp_editing_utils.raw_files:
-        logger.debug("Processing as raw file")
         with rawpy.imread(filepath.as_posix()) as raw:
             imcv2 = raw.postprocess()
         img = Image.fromarray(imcv2)
@@ -71,7 +71,7 @@ def process_file(
     blurred_img = img.filter(
         ImageFilter.GaussianBlur(radius=4)
     )  # to remove outlier pixels
-    binary_img = xmp_editing_utils.convert_to_binary(blurred_img, 45, 255)
+    binary_img = xmp_editing_utils.convert_to_binary(blurred_img, threshold, 255)
     bg = Image.new(binary_img.mode, binary_img.size)
     diff = ImageChops.difference(binary_img, bg)
     bbox = diff.getbbox()
@@ -83,7 +83,7 @@ def process_file(
         return
     elif bbox:
         color_control = xmp_editing_utils.get_control_value(original_img, bbox)
-        if color_control > 15:
+        if color_control > threshold / 2:
             logger.warning(f"Crop bounds may be problematic for {filepath.as_posix()}")
     else:
         raise RuntimeError("Could not find a bounding box for crop")
