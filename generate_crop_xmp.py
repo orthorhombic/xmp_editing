@@ -54,16 +54,18 @@ def process_file(
         logger.debug("Processing as raw file")
         with rawpy.imread(filepath.as_posix()) as raw:
             imcv2 = raw.postprocess()
+        img = Image.fromarray(imcv2)
+        # convert from cv2 image file to pil image file
     elif filepath.suffix.upper() in xmp_editing_utils.other_files:
         logger.debug("Processing as regular file. Extension not in raw_files list.")
         imcv2 = cv2.imread(filepath.as_posix())
+        img = Image.fromarray(
+            cv2.cvtColor(imcv2, cv2.COLOR_BGR2RGB)
+        )  # convert from cv2 image file to pil image file
     else:
         logger.error("Filetype not supported")
         return
 
-    img = Image.fromarray(
-        cv2.cvtColor(imcv2, cv2.COLOR_BGR2RGB)
-    )  # convert from cv2 image file to pil image file
     original_img = img
     w, h = original_img.size
     blurred_img = img.filter(
