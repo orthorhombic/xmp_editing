@@ -44,7 +44,7 @@ def copy_xmp_temp(
     file_raw_xmp = file_raw_xmp.strip("\x00")
     if file_raw_xmp == "":
         # raise ValueError(f"Empty XMP retrieved for {from_file}")
-        logger.warning(f"Empty XMP retrieved for {from_file}. Using empty XML string")
+        logger.info(f"Empty XMP retrieved for {from_file}. Using empty XML string")
         # logger.debug(f"Problem working on {from_file}: {e}")
         file_raw_xmp = empty_xml
 

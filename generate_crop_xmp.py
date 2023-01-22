@@ -33,10 +33,30 @@ config = importlib.resources.files("untracked").joinpath("crop_config.yml")
 with open(config) as c_file:
     config_data = yaml.load(c_file, Loader=yaml.SafeLoader)
 
-root_path = pathlib.Path(config_data["root_path"])  # default "untracked"
-debug = config_data["debug"]  # default False
-crop_addition = config_data["crop_addition"]  # default -5
-threshold = config_data["threshold"]  # default 45
+if config_data.get("root_path") is not None:
+    root_path = pathlib.Path(config_data["root_path"])  # default "untracked"
+else:
+    root_path = "untracked"
+
+if config_data.get("debug") is not None:
+    debug = config_data["debug"]
+else:
+    debug = False
+
+if config_data.get("crop_addition") is not None:
+    crop_addition = config_data["crop_addition"]  # default -5
+else:
+    crop_addition = 5
+
+if config_data.get("threshold") is not None:
+    threshold = config_data["threshold"]  # default 45
+else:
+    threshold = 50
+
+if config_data.get("blur_radius") is not None:
+    blur_radius = config_data["blur_radius"]  # default 4, if -1 auto
+else:
+    blur_radius = -1
 
 if debug:
     debug_path = pathlib.Path(root_path, "debug")
@@ -48,6 +68,7 @@ def process_file(
     debug_path: pathlib.Path,
     debug: bool,
     crop_addition: int,
+    blur_radius: int,
     et: ExifTool,
 ):
 
@@ -68,8 +89,14 @@ def process_file(
 
     original_img = img
     w, h = original_img.size
+
+    if blur_radius == -1:
+        blur_radius = min([w, h]) // 400  # number picked based on few tests
+        blur_radius = min(
+            [blur_radius, 12]
+        )  # apply a ceiling so it doesn't get too high
     blurred_img = img.filter(
-        ImageFilter.GaussianBlur(radius=4)
+        ImageFilter.GaussianBlur(radius=blur_radius)
     )  # to remove outlier pixels
     binary_img = xmp_editing_utils.convert_to_binary(blurred_img, threshold, 255)
     bg = Image.new(binary_img.mode, binary_img.size)
@@ -178,6 +205,7 @@ def main():
                     debug_path=debug_path,
                     debug=debug,
                     crop_addition=crop_addition,
+                    blur_radius=blur_radius,
                     et=et,
                 )
             except Exception as e:
