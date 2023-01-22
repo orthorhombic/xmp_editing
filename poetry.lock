@@ -1794,6 +1794,32 @@ files = [
 ]
 
 [[package]]
+name = "opencv-python"
+version = "4.7.0.68"
+description = "Wrapper package for OpenCV python bindings."
+category = "main"
+optional = false
+python-versions = ">=3.6"
+files = [
+    {file = "opencv-python-4.7.0.68.tar.gz", hash = "sha256:9829e6efedde1d1b8419c5bd4d62d289ecbf44ae35b843c6da9e3cbcba1a9a8a"},
+    {file = "opencv_python-4.7.0.68-cp37-abi3-macosx_10_13_x86_64.whl", hash = "sha256:abc6adfa8694f71a4caffa922b279bd9d96954a37eee40b147f613c64310b411"},
+    {file = "opencv_python-4.7.0.68-cp37-abi3-macosx_11_0_arm64.whl", hash = "sha256:86f4b60b9536948f16d2170ba3a9b22d3955a957dc61a9bc56e53692c6db2c7e"},
+    {file = "opencv_python-4.7.0.68-cp37-abi3-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:6d1c993811f92ddd7919314ada7b9be1f23db1c73f1384915c834dee8549c0b9"},
+    {file = "opencv_python-4.7.0.68-cp37-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:3a00e12546e5578f6bb7ed408c37fcfea533d74e9691cfaf40926f6b43295577"},
+    {file = "opencv_python-4.7.0.68-cp37-abi3-win32.whl", hash = "sha256:e770e9f653a0e5e72b973adb8213fae2df4642730ba1faf31e73a54287a4d5d4"},
+    {file = "opencv_python-4.7.0.68-cp37-abi3-win_amd64.whl", hash = "sha256:7a08f9d1f9dd52de63a7bb448ab7d6d4a1a85b767c2358501d968d1e4d95098d"},
+]
+
+[package.dependencies]
+numpy = [
+    {version = ">=1.21.2", markers = "python_version >= \"3.10\""},
+    {version = ">=1.21.4", markers = "python_version >= \"3.10\" and platform_system == \"Darwin\""},
+    {version = ">=1.19.3", markers = "python_version >= \"3.6\" and platform_system == \"Linux\" and platform_machine == \"aarch64\" or python_version >= \"3.9\""},
+    {version = ">=1.17.0", markers = "python_version >= \"3.7\""},
+    {version = ">=1.17.3", markers = "python_version >= \"3.8\""},
+]
+
+[[package]]
 name = "packaging"
 version = "21.3"
 description = "Core utilities for Python packages"
@@ -2617,6 +2643,39 @@ packaging = "*"
 test = ["pytest (>=6,!=7.0.0,!=7.0.1)", "pytest-cov (>=3.0.0)", "pytest-qt"]
 
 [[package]]
+name = "rawpy"
+version = "0.17.3"
+description = "RAW image processing for Python, a wrapper for libraw"
+category = "main"
+optional = false
+python-versions = "*"
+files = [
+    {file = "rawpy-0.17.3-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:487c4b313634383fece8057419a3ad3f202ec7ceeb1c9d68372b5b70fe956b23"},
+    {file = "rawpy-0.17.3-cp310-cp310-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:46847fd8990c3c9ee20bef2cc0c9b1e71246213a88f572a693ee533ba4141420"},
+    {file = "rawpy-0.17.3-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:350a705584014ad5a5e90c77b3bf4ff434170e8cdde8da8f2036cabe1a9ea895"},
+    {file = "rawpy-0.17.3-cp310-cp310-win_amd64.whl", hash = "sha256:e847878d7c77f41bb08ed54b4b4a7f4cd8a4b2f277553cab938712db0c054566"},
+    {file = "rawpy-0.17.3-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:8a5651fc2fe427a37d027b8408bedff5b4f5f10c86e9164ec17c07e44aeb2fa8"},
+    {file = "rawpy-0.17.3-cp311-cp311-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:cc2ab55c02fff0a20c7a55ccd30eb25d51527549ab58d668edc261c16f41aa31"},
+    {file = "rawpy-0.17.3-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:1e92b3af8a1f3d80f5323e44bec4fbf9fd327fe82e910c1e9fea182e8f35a04a"},
+    {file = "rawpy-0.17.3-cp311-cp311-win_amd64.whl", hash = "sha256:b77dd95f2ad8dc2a767e994b7161099f595095718f21d434b48c773e3a76c8db"},
+    {file = "rawpy-0.17.3-cp37-cp37m-macosx_10_9_x86_64.whl", hash = "sha256:ac6d1b2aa144a616d77e1067d0b94a1153f12703efbb1e78293e336d9a95dc21"},
+    {file = "rawpy-0.17.3-cp37-cp37m-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:b2a1489d204a648765925c6166a15642d0e60db9d764f6ca11307f58a6bb40ec"},
+    {file = "rawpy-0.17.3-cp37-cp37m-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:6fe941eedf8e1a9878c747032f8df1664988ededb2bfafb9d7471f24afd97803"},
+    {file = "rawpy-0.17.3-cp37-cp37m-win_amd64.whl", hash = "sha256:8e733dce9de1de6fb05444e8d0f7dd74b94bb27d0b1bbb501a0c31a96b81f72e"},
+    {file = "rawpy-0.17.3-cp38-cp38-macosx_10_9_x86_64.whl", hash = "sha256:104b483a4803a0c4a63d2e4f0f66b82227d45c3d06f0c73c9d6f3b709c21a093"},
+    {file = "rawpy-0.17.3-cp38-cp38-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:1d13dd6b5a97d59f48bced232e07cebfc86836fead85bddf297cb115f63fe8af"},
+    {file = "rawpy-0.17.3-cp38-cp38-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:7be4eb8938dfa1f44e59cd2ea114788c4734dd802ef1b22e1312c76f14d6edd7"},
+    {file = "rawpy-0.17.3-cp38-cp38-win_amd64.whl", hash = "sha256:8b02c9a9226425528682aa113dc70174b07f889050fedb245cdbc6a8626118c9"},
+    {file = "rawpy-0.17.3-cp39-cp39-macosx_10_9_x86_64.whl", hash = "sha256:cc87917eb759c1e1237db0c675d7fbee6c0cfa12e8fb0b4745d635d6d8969e4e"},
+    {file = "rawpy-0.17.3-cp39-cp39-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:f5991e33d90ef348e79af02e0cf96db5cba5feb605a24aa88d5c20959052a026"},
+    {file = "rawpy-0.17.3-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:e1939802f049322aff0394b6e131f9ea15e5eb63b869db2e8453dd8612659f90"},
+    {file = "rawpy-0.17.3-cp39-cp39-win_amd64.whl", hash = "sha256:3f0f6f251f87d3960984d7ec938495f07e8295ea1ba47d6e216cbb0c7d090021"},
+]
+
+[package.dependencies]
+numpy = "*"
+
+[[package]]
 name = "reorder-python-imports"
 version = "3.9.0"
 description = "Tool for reordering python imports"
@@ -3114,4 +3173,4 @@ files = [
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.10.8"
-content-hash = "44aa2f6d3611264f783ef3d04bac74ae7cbeba4cb3099681b077dd46a22dad74"
+content-hash = "1622dff36c4356c345663a92ccd4d2e738939fe95de58e4e96b396141904c4ca"

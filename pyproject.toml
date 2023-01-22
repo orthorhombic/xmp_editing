@@ -16,6 +16,8 @@ slpp = { git = "https://github.com/SirAnthony/slpp" }
 logzero = "^1.7.0"
 pyexiv2 = "^2.8.1"
 pyexiftool = "^0.5.5"
+opencv-python = "^4.7.0.68"
+rawpy = "^0.17.3"
 
 [tool.poetry.dev-dependencies]
 mypy = "^0.991"

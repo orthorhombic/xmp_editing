@@ -1,6 +1,5 @@
 import importlib.resources
 import pathlib
-import re
 import shutil
 import sqlite3
 import tempfile
@@ -12,6 +11,8 @@ import yaml
 from exiftool import ExifTool
 from logzero import logger
 from slpp import slpp as lua
+
+from xmp_editing_utils import copy_xmp_temp
 
 # NOTE: After import into darktable, the metadata "write sidecar files" button needs to be pressed
 # This will write from the database (including imported Lightroom date) to the new darktable xmp files
@@ -29,15 +30,6 @@ root_path = pathlib.Path(config_data["root_path"])
 update_file = config_data["update_file"]
 catalog_file = config_data["catalog_file"]
 RootFolderName = config_data["RootFolderName"]
-
-empty_xml = """<x:xmpmeta xmlns:x="adobe:ns:meta/" x:xmptk="XMP Core 5.5.0">
- <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
-  <rdf:Description rdf:about=""
-    xmlns:photoshop="http://ns.adobe.com/photoshop/1.0/"
-    xmlns:xmp="http://ns.adobe.com/xap/1.0/">
-  </rdf:Description>
- </rdf:RDF>
-</x:xmpmeta>"""
 
 # load tags darktable can process:
 # with importlib.resources.files("tags").joinpath("crs_tags.txt").open('r', encoding="utf8") as f:
@@ -165,42 +157,6 @@ def check_and_set_crop(xmp_dict: dict) -> None:
     if intersection_size > 0:
         xmp_dict["Xmp.crs.HasCrop"] = "True"
         logger.debug("Set HasCrop")
-
-
-def copy_xmp_temp(
-    from_file: pathlib.PosixPath,
-    to_file: pathlib.PosixPath,
-    et: ExifTool,
-    warn: bool = False,
-):
-
-    # exiftool implementation. Does not contain much error handling
-    # will not raise an error if the file does not exist
-    if not from_file.is_file():
-        if warn:
-            logger.warning(f"File {from_file} not found")
-        else:
-            logger.debug(f"File {from_file} not found")
-        return
-
-    # run exiftool command on file to return xmp string
-    file_raw_xmp = et.execute(
-        *["-xmp", "-b", str(from_file.as_posix()), "-api", "LargeFileSupport=1"]
-    )
-    # strip null characters common in some languages
-    file_raw_xmp = file_raw_xmp.strip("\x00")
-    if file_raw_xmp == "":
-        # raise ValueError(f"Empty XMP retrieved for {from_file}")
-        logger.warning(f"Empty XMP retrieved for {from_file}. Using empty XML string")
-        # logger.debug(f"Problem working on {from_file}: {e}")
-        file_raw_xmp = empty_xml
-
-    # write data to temp
-    with open(to_file, "w") as f:
-        f.write(file_raw_xmp)
-    # confirm the raw xmp can be opened - this requires the log level is not at 4 (muted)
-    with pyexiv2.Image(to_file.as_posix()) as img:
-        file_xmp = img.read_xmp()
 
 
 def check_drop_modify(file_to_modify, xmp_to_clean):
