@@ -105,54 +105,65 @@ def process_file(
     # left, top, right, bottom
     # 0%, 0%, 100%, 100%
 
+    xmp_param = {}
+
     if bbox == (0, 0, w, h):
         logger.error(f"No cropping detected for {filepath.as_posix()}")
-        return
     elif bbox:
         color_control = xmp_editing_utils.get_control_value(original_img, bbox)
         if color_control > threshold / 2:
             logger.warning(f"Crop bounds may be problematic for {filepath.as_posix()}")
+        # adjust based on crop_addition
+
+        if bbox[0] + crop_addition > 0:
+            left = bbox[0] + crop_addition
+        else:
+            left = 0
+
+        if bbox[1] + crop_addition > 0:
+            top = bbox[1] + crop_addition
+        else:
+            top = 0
+
+        if bbox[2] - crop_addition < w:
+            right = bbox[2] - crop_addition
+        else:
+            right = w
+
+        if bbox[3] - crop_addition < h:
+            bottom = bbox[3] - crop_addition
+        else:
+            bottom = h
+
+        new_box = (left, top, right, bottom)
+
+        xmp_param["Xmp.crs.HasCrop"] = "True"
+        xmp_param["Xmp.crs.CropLeft"] = left / w
+        xmp_param["Xmp.crs.CropTop"] = top / h
+        xmp_param["Xmp.crs.CropRight"] = right / w
+        xmp_param["Xmp.crs.CropBottom"] = bottom / h
+        xmp_param["Xmp.crs.CropAngle"] = 0
+
+        if debug:
+            im = xmp_editing_utils.draw_cropline(original_img, new_box)
+            max_size = 800
+            scale_factor = max_size / max([w, h])
+            small_w, small_h = int(w * scale_factor), int(h * scale_factor)
+
+            im = im.resize((small_w, small_h))
+
+            debug_filename = pathlib.Path(debug_path, filepath.name + ".jpg")
+            im.save(debug_filename, quality=100, subsampling=0)
+
     else:
         raise RuntimeError("Could not find a bounding box for crop")
 
-    # adjust based on cropp_addition
-
-    if bbox[0] + crop_addition > 0:
-        left = bbox[0] + crop_addition
-    else:
-        left = 0
-
-    if bbox[1] + crop_addition > 0:
-        top = bbox[1] + crop_addition
-    else:
-        top = 0
-
-    if bbox[2] - crop_addition < w:
-        right = bbox[2] - crop_addition
-    else:
-        right = w
-
-    if bbox[3] - crop_addition < h:
-        bottom = bbox[3] - crop_addition
-    else:
-        bottom = h
-
-    new_box = (left, top, right, bottom)
-
-    crop_parm = {}
-
-    crop_parm["Xmp.crs.HasCrop"] = "True"
-    crop_parm["Xmp.crs.CropLeft"] = left / w
-    crop_parm["Xmp.crs.CropTop"] = top / h
-    crop_parm["Xmp.crs.CropRight"] = right / w
-    crop_parm["Xmp.crs.CropBottom"] = bottom / h
-    crop_parm["Xmp.crs.CropAngle"] = 0
-    crop_parm["Xmp.tiff.ImageWidth"] = w
-    crop_parm["Xmp.tiff.ImageLength"] = h
-    crop_parm["Xmp.tiff.Orientation"] = 1
+    xmp_param["Xmp.tiff.ImageWidth"] = w
+    xmp_param["Xmp.tiff.ImageLength"] = h
+    xmp_param["Xmp.tiff.Orientation"] = 1
 
     if filepath.suffix.upper() == ".DNG":
-        crop_parm["Xmp.crs.Exposure2012"] = -0.01
+        xmp_param["Xmp.crs.Exposure2012"] = -0.01
 
     tempdir = tempfile.TemporaryDirectory(dir="/dev/shm")
     temp_dir_path = pathlib.Path(tempdir.name)
@@ -166,23 +177,12 @@ def process_file(
 
     # write xmp
     with pyexiv2.Image(temp_xmp_path.as_posix()) as img:
-        img.modify_xmp(crop_parm)
+        img.modify_xmp(xmp_param)
         img.read_xmp()
 
     copy2(temp_xmp_path, filepath_lr_xmp)
 
     tempdir.cleanup()
-
-    if debug:
-        im = xmp_editing_utils.draw_cropline(original_img, new_box)
-        max_size = 800
-        scale_factor = max_size / max([w, h])
-        small_w, small_h = int(w * scale_factor), int(h * scale_factor)
-
-        im = im.resize((small_w, small_h))
-
-        debug_filename = pathlib.Path(debug_path, filepath.name + ".jpg")
-        im.save(debug_filename, quality=100, subsampling=0)
 
 
 def main():
