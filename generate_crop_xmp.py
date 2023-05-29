@@ -5,6 +5,7 @@ import importlib.resources
 import pathlib
 import tempfile
 from shutil import copy2
+import concurrent.futures
 
 import cv2
 import logzero
@@ -58,9 +59,26 @@ if config_data.get("blur_radius") is not None:
 else:
     blur_radius = -1
 
+if config_data.get("max_workers") is not None:
+    max_workers = config_data["max_workers"]  # default 1 for if network-limited
+else:
+    max_workers = 1
+
 if debug:
     debug_path = pathlib.Path(root_path, "debug")
     debug_path.mkdir(parents=True, exist_ok=True)
+
+
+def shrink_image(im, max_size=800):
+    w, h = im.size
+    max_size = 800
+    if max(w, h) <= max_size:
+        return im
+    else:
+        scale_factor = max_size / max([w, h])
+        small_w, small_h = int(w * scale_factor), int(h * scale_factor)
+
+        return im.resize((small_w, small_h))
 
 
 def process_file(
@@ -91,7 +109,7 @@ def process_file(
         img = Image.fromarray(imcv2)
         # convert from cv2 image file to pil image file
     elif filepath.suffix.upper() in xmp_editing_utils.other_files:
-        logger.debug("Processing as regular file. Extension not in raw_files list.")
+        # logger.debug("Processing as regular file. Extension not in raw_files list.")
         imcv2 = cv2.imread(filepath.as_posix())
         img = Image.fromarray(
             cv2.cvtColor(imcv2, cv2.COLOR_BGR2RGB)
@@ -159,11 +177,8 @@ def process_file(
 
         if debug:
             im = xmp_editing_utils.draw_cropline(original_img, new_box)
-            max_size = 800
-            scale_factor = max_size / max([w, h])
-            small_w, small_h = int(w * scale_factor), int(h * scale_factor)
 
-            im = im.resize((small_w, small_h))
+            im = shrink_image(im, max_size=800)
 
             debug_filename = pathlib.Path(debug_path, filepath.name + ".jpg")
             im.save(debug_filename, quality=100, subsampling=0)
@@ -213,11 +228,11 @@ def main():
         files = [x for x in files if not x.is_relative_to(debug_path)]
 
     with ExifTool() as et:
-        for filepath in files:
-            # kept in a simple for loop because limited by network bandwidth
-            logger.info(f"Processing: {filepath}")
-            try:
-                process_file(
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+            future_to_path = {}
+            for filepath in files:
+                future = executor.submit(
+                    process_file,
                     filepath=filepath,
                     debug_path=debug_path,
                     debug=debug,
@@ -225,9 +240,17 @@ def main():
                     blur_radius=blur_radius,
                     et=et,
                 )
-            except Exception as e:
-                logger.error(f"Failed to process: {filepath}")
-                logger.error(f"Exception: {e}")
+                future_to_path[future] = filepath.as_posix()
+
+            for future in concurrent.futures.as_completed(future_to_path):
+                filepath = future_to_path[future]
+                try:
+                    data = future.result()
+                except BaseException as e:
+                    logger.error(f"Failed to process: {filepath}")
+                    logger.error(f"Exception: {e}")
+                else:
+                    logger.info(f"Completed: {filepath}")
 
 
 if __name__ == "__main__":

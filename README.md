@@ -55,6 +55,7 @@ debug: True
 crop_addition: -5
 threshold: 60
 blur_radius: 6
+max_workers: 6
 ```
 
 To run:
