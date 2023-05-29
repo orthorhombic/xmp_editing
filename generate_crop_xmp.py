@@ -71,10 +71,23 @@ def process_file(
     blur_radius: int,
     et: ExifTool,
 ):
-
-    if filepath.suffix.upper() in xmp_editing_utils.raw_files:
-        with rawpy.imread(filepath.as_posix()) as raw:
-            imcv2 = raw.postprocess()
+    suffix = filepath.suffix.upper()
+    if suffix in xmp_editing_utils.raw_files:
+        if suffix == ".CR3":
+            with rawpy.imread(filepath.as_posix()) as raw:
+                imcv2 = raw.postprocess(
+                    output_color=rawpy.ColorSpace.raw,
+                    gamma=(1.1, 3),
+                    use_camera_wb=True,
+                    output_bps=8,
+                    half_size=True,
+                    user_black=512,
+                    # no_auto_bright=True,
+                    demosaic_algorithm=rawpy.DemosaicAlgorithm.LINEAR,
+                )
+        else:
+            with rawpy.imread(filepath.as_posix()) as raw:
+                imcv2 = raw.postprocess(half_size=True)
         img = Image.fromarray(imcv2)
         # convert from cv2 image file to pil image file
     elif filepath.suffix.upper() in xmp_editing_utils.other_files:
@@ -187,13 +200,17 @@ def process_file(
 
 def main():
 
-    p = root_path.glob("*")
+    p = root_path.rglob("*")
     files = [x for x in p if x.is_file()]
 
     supported_files = set.union(
         set(xmp_editing_utils.raw_files), set(xmp_editing_utils.other_files)
     )
     files = [x for x in files if x.suffix.upper() in supported_files]
+
+    if debug:
+        # do not include files in debug directory
+        files = [x for x in files if not x.is_relative_to(debug_path)]
 
     with ExifTool() as et:
         for filepath in files:
