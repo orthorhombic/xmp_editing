@@ -43,26 +43,37 @@ To run:
 python extract_xmp.py
 ```
 
-## Todo:
+## Create crop xmp
 
-- Successfully generate a cropped image in darktable from a raw vuescan dng file.
-- dry run by creating xmp files in a separate directory tree mirroring the lightroom database
-- only write xmp file if base file exists in the expected directory
+Before running, you must also select a single root directory on which you want to operate. Populate this in the crop_config.yml file as in the example below.
+
+Create a folder called `untracked` and add `config.yml` with your desired configuration. An example is below:
+
+```yaml
+root_path: "/media/my_files/Image Library"
+debug: True
+crop_addition: -5
+threshold: 60
+blur_radius: 6
+```
+
+To run:
+
+```bash
+python generate_crop_xmp.py
+```
+
+## Todo
+
 - refine the sql query to avoid getting multiple rows if there are virtual copies
   - examine whether virtual copies could be carried over to Darktable
-- add logging to measure progress and throw warnings
 
-## Immediate next steps:
+## Immediate next steps
 
-- add ability to create an xmp file from scratch if none exists - look at exiftool
-- convert to using `with pyexiv2.Image(...`)
-- look at pyexiftool https://github.com/sylikc/pyexiftool
 - Test workflow of pulling image data, combine with file.xmp, combine with in-memory DB xmp. lastly update with developsettings - all in memory handling to avoid writes
 
 ## Testing needed:
 
-- What happens when the tiff entries in the XMP file are missing (e.g. for jpeg)
-- how does the cropping and data import work with jpegs?
 - test spot adjustment handling
 
 ## Quick command reference
