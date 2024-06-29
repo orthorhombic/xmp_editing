@@ -64,9 +64,16 @@ if config_data.get("max_workers") is not None:
 else:
     max_workers = 1
 
+if config_data.get("raw_crop") is not None:
+    raw_crop = config_data["raw_crop"]
+else:
+    raw_crop = False
+
 if debug:
     debug_path = pathlib.Path(root_path, "debug")
     debug_path.mkdir(parents=True, exist_ok=True)
+else:
+    debug_path = None
 
 
 def shrink_image(im, max_size=800):
@@ -90,6 +97,7 @@ def process_file(
     et: ExifTool,
 ):
     suffix = filepath.suffix.upper()
+    rawfile=False
     if suffix in xmp_editing_utils.raw_files:
         if suffix == ".CR3":
             with rawpy.imread(filepath.as_posix()) as raw:
@@ -106,7 +114,12 @@ def process_file(
         else:
             with rawpy.imread(filepath.as_posix()) as raw:
                 imcv2 = raw.postprocess(half_size=True)
+        rawfile=True
         img = Image.fromarray(imcv2)
+        if raw_crop:
+            #convert to half size:
+            raw_crop_half=tuple([x/2 for x in raw_crop])
+            img = img.crop(raw_crop_half)
         # convert from cv2 image file to pil image file
     elif filepath.suffix.upper() in xmp_editing_utils.other_files:
         # logger.debug("Processing as regular file. Extension not in raw_files list.")
@@ -176,6 +189,7 @@ def process_file(
         xmp_param["Xmp.crs.CropAngle"] = 0
 
         if debug:
+            logger.debug(f"{filepath.name} bbox: left {bbox[0]} top  {bbox[1]} right  {bbox[2]} bottom  {bbox[3]}, w: {w} h: {h}")
             im = xmp_editing_utils.draw_cropline(original_img, new_box)
 
             im = shrink_image(im, max_size=800)
@@ -186,9 +200,17 @@ def process_file(
     else:
         raise RuntimeError("Could not find a bounding box for crop")
 
-    xmp_param["Xmp.tiff.ImageWidth"] = w
-    xmp_param["Xmp.tiff.ImageLength"] = h
-    xmp_param["Xmp.tiff.Orientation"] = 1
+    if rawfile:
+        xmp_param["Xmp.tiff.ImageWidth"] = w*2
+        xmp_param["Xmp.tiff.ImageLength"] = h*2
+    else:
+        xmp_param["Xmp.tiff.ImageWidth"] = w
+        xmp_param["Xmp.tiff.ImageLength"] = h
+
+    if config_data["mirror"]:
+        xmp_param["Xmp.tiff.Orientation"] = 2
+    else:
+        xmp_param["Xmp.tiff.Orientation"] = 1
 
     if filepath.suffix.upper() == ".DNG":
         xmp_param["Xmp.crs.Exposure2012"] = -0.01

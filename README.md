@@ -56,6 +56,9 @@ crop_addition: -5
 threshold: 60
 blur_radius: 6
 max_workers: 6
+mirror: False
+# https://github.com/Beep6581/RawTherapee/blob/0bee94e4aa149e9bb6b31a52925b8dda9493223d/rtengine/camconst.json#L1263
+raw_crop: [128, 96, 8320, 5560] # Canon R5
 ```
 
 To run:
