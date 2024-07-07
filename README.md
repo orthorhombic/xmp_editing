@@ -67,6 +67,10 @@ To run:
 python generate_crop_xmp.py
 ```
 
+The file workflow to handle rotated images is to process the rotation/tagging in digikam prior to loading files into darktable.
+
+For importing into darktable (as of 4.8), the "preferences>storage>create xmp files" seting must be set to "on import" and the "preferences>lighttable>thumbnails>use raw file..." must be set to never for the settings to load from XMP. Upon opening the files in darktable, the files must be cycled through the darkroom module to update the darktable xmp with the appropriate metadata.
+
 ## Todo
 
 - refine the sql query to avoid getting multiple rows if there are virtual copies

@@ -75,6 +75,20 @@ if debug:
 else:
     debug_path = None
 
+# create a mapping from "normal" rotation to horizontally mirrored counterpart
+mirror_map={
+    "1":"2", 
+    "6":"5",
+    "8":"7",
+    "3":"4",
+}
+# mapping to switch from mirrored to standard
+mirror_map_invert={
+    "2":"1", 
+    "5":"6",
+    "7":"8",
+    "4":"3",
+}
 
 def shrink_image(im, max_size=800):
     w, h = im.size
@@ -207,11 +221,6 @@ def process_file(
         xmp_param["Xmp.tiff.ImageWidth"] = w
         xmp_param["Xmp.tiff.ImageLength"] = h
 
-    if config_data["mirror"]:
-        xmp_param["Xmp.tiff.Orientation"] = 2
-    else:
-        xmp_param["Xmp.tiff.Orientation"] = 1
-
     if filepath.suffix.upper() == ".DNG":
         xmp_param["Xmp.crs.Exposure2012"] = -0.01
 
@@ -221,12 +230,27 @@ def process_file(
     temp_xmp_path = pathlib.Path(temp_dir_path, "orig.xmp")
     filepath_lr_xmp = filepath.with_suffix(".xmp")
 
-    # Create temp files from extracted data
+    # Create temp files from extracted data if the lr xmp doesn't already exist
     with ExifTool() as et:
-        xmp_editing_utils.copy_xmp_temp(filepath, temp_xmp_path, et=et)
+        if filepath_lr_xmp.is_file():
+            xmp_editing_utils.copy_xmp_temp(filepath_lr_xmp, temp_xmp_path, et=et)
+        else:
+            xmp_editing_utils.copy_xmp_temp(filepath, temp_xmp_path, et=et)
 
-    # write xmp
+    # get orientation and write appropriate xmp
     with pyexiv2.Image(temp_xmp_path.as_posix()) as img:
+        orig_data = img.read_xmp()
+
+        #check if orientation tag exists. if not, set to 1
+        xmp_param["Xmp.tiff.Orientation"]=orig_data.get("Xmp.tiff.Orientation","1")
+
+        mirrored= xmp_param["Xmp.tiff.Orientation"] in ["2","5","7","4"]
+        # update orientation if mirror parameter is set and not already mirrored
+        if config_data["mirror"] and not mirrored:
+            xmp_param["Xmp.tiff.Orientation"] = mirror_map[xmp_param["Xmp.tiff.Orientation"]]
+        elif not config_data["mirror"] and mirrored:
+            xmp_param["Xmp.tiff.Orientation"] = mirror_map_invert[xmp_param["Xmp.tiff.Orientation"]]
+        
         img.modify_xmp(xmp_param)
         img.read_xmp()
 
