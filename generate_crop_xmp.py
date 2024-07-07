@@ -241,6 +241,10 @@ def process_file(
     with pyexiv2.Image(temp_xmp_path.as_posix()) as img:
         orig_data = img.read_xmp()
 
+        # Override mirror parameter with "no_mirror" tag
+        if "no_mirror" in orig_data.get("Xmp.dc.subject",list()):
+            config_data["mirror"] = False
+
         #check if orientation tag exists. if not, set to 1
         xmp_param["Xmp.tiff.Orientation"]=orig_data.get("Xmp.tiff.Orientation","1")
 
