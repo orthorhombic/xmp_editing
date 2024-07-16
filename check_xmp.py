@@ -15,7 +15,6 @@ import xmp_editing_utils
 
 
 logzero.logfile("xmp_rotating_logfile.log", maxBytes=1e8, backupCount=3)
-logger.setLevel(level="DEBUG")
 
 
 config = importlib.resources.files("untracked").joinpath("crop_config.yml")
@@ -28,20 +27,58 @@ if config_data.get("root_path") is not None:
 else:
     root_path = "untracked"
 
+if config_data.get("debug") is not None:
+    debug = config_data["debug"]
+else:
+    debug = False
 
-def get_xmp_path(image_path):
+if debug:
+    logger.setLevel(level="DEBUG")
+else:
+    logger.setLevel(level="INFO")
+
+
+mirror_config = config_data.get("mirror",False) # default to not mirroring
+
+def check_dt_xmp_file(image_path):
     xmp_path = image_path.with_suffix(f"{image_path.suffix}.xmp")
-    return xmp_path
-
-def check_xmp_file(xmp_path):
+    error=0
     if not xmp_path.exists():
-        logger.error(f"XMP file does not exist: {xmp_path}")
+        logger.debug(f"XMP file does not exist: {xmp_path}")
     else:
         with pyexiv2.Image(xmp_path.as_posix()) as img:
             xmp_data=img.read_xmp()
             history_end=xmp_data.get("Xmp.darktable.history_end","0")
             if int(history_end)<5:
+                error=1
                 logger.error(f"XMP file does not have darktable edit history: {xmp_path}")
+    return error
+
+def check_base_xmp_file(image_path,mirror):
+    xmp_path = image_path.with_suffix(".xmp")
+    error=0
+    if not xmp_path.exists():
+        logger.error(f"XMP file does not exist: {xmp_path}")
+    else:
+        with pyexiv2.Image(xmp_path.as_posix()) as img:
+            xmp_data=img.read_xmp()
+            
+            # Override mirror parameter with "no_mirror" tag
+            if "no_mirror" in xmp_data.get("Xmp.dc.subject",list()):
+                mirror = False
+
+            orientation=xmp_data.get("Xmp.tiff.Orientation","0")
+            mirrored= orientation in ["2","5","7","4"]
+            if orientation=="0":
+                error=1
+                logger.error(f"XMP file has invalid rotation: {xmp_path}")
+            elif mirror and not mirrored:
+                error=1
+                logger.error(f"XMP file not mirrored when it should be: {xmp_path}")
+            elif not mirror and mirrored:
+                error=1
+                logger.error(f"XMP file mirrored when it should NOT be: {xmp_path}")
+    return error
 
 def main():
 
@@ -53,11 +90,16 @@ def main():
     )
     files = [x for x in files if x.suffix.upper() in supported_files]
 
+    error_count=0
     for file in files:
-        expected_xmp=get_xmp_path(file)
-        logger.info(f"Checking {file} with {expected_xmp.name}")
-        check_xmp_file(expected_xmp)
-
+        error=0
+        logger.debug(f"Checking {file}")
+        error+=check_base_xmp_file(file,mirror=mirror_config)
+        error+=check_dt_xmp_file(file)
+        if error>0:
+            error_count+=1
+    if error_count>0:
+        logger.error(f"Completed with {error_count} errors")
 
 if __name__ == "__main__":
     logger.info("Running main()")

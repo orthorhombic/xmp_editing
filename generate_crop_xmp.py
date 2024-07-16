@@ -69,6 +69,8 @@ if config_data.get("raw_crop") is not None:
 else:
     raw_crop = False
 
+mirror_config = config_data.get("mirror",False) # default to not mirroring
+
 if debug:
     debug_path = pathlib.Path(root_path, "debug")
     debug_path.mkdir(parents=True, exist_ok=True)
@@ -108,7 +110,7 @@ def process_file(
     debug: bool,
     crop_addition: int,
     blur_radius: int,
-    et: ExifTool,
+    mirror: bool,
 ):
     suffix = filepath.suffix.upper()
     rawfile=False
@@ -166,7 +168,7 @@ def process_file(
     xmp_param = {}
 
     if bbox == (0, 0, w, h):
-        logger.error(f"No cropping detected for {filepath.as_posix()}")
+        logger.warning(f"No cropping detected for {filepath.as_posix()}")
     elif bbox:
         color_control = xmp_editing_utils.get_control_value(original_img, bbox)
         if color_control > threshold / 2:
@@ -224,8 +226,9 @@ def process_file(
     if filepath.suffix.upper() == ".DNG":
         xmp_param["Xmp.crs.Exposure2012"] = -0.01
 
-    tempdir = tempfile.TemporaryDirectory(dir="/dev/shm")
+    tempdir = tempfile.TemporaryDirectory(suffix=filepath.stem,dir="/dev/shm")
     temp_dir_path = pathlib.Path(tempdir.name)
+    # logger.debug(f"Using temp directory {temp_dir_path} for {filepath.name}")
 
     temp_xmp_path = pathlib.Path(temp_dir_path, "orig.xmp")
     filepath_lr_xmp = filepath.with_suffix(".xmp")
@@ -243,22 +246,46 @@ def process_file(
 
         # Override mirror parameter with "no_mirror" tag
         if "no_mirror" in orig_data.get("Xmp.dc.subject",list()):
-            config_data["mirror"] = False
+            mirror = False
 
         #check if orientation tag exists. if not, set to 1
         xmp_param["Xmp.tiff.Orientation"]=orig_data.get("Xmp.tiff.Orientation","1")
 
         mirrored= xmp_param["Xmp.tiff.Orientation"] in ["2","5","7","4"]
         # update orientation if mirror parameter is set and not already mirrored
-        if config_data["mirror"] and not mirrored:
+        if mirror and not mirrored:
             xmp_param["Xmp.tiff.Orientation"] = mirror_map[xmp_param["Xmp.tiff.Orientation"]]
-        elif not config_data["mirror"] and mirrored:
+        elif not mirror and mirrored:
             xmp_param["Xmp.tiff.Orientation"] = mirror_map_invert[xmp_param["Xmp.tiff.Orientation"]]
         
         img.modify_xmp(xmp_param)
         img.read_xmp()
 
     copy2(temp_xmp_path, filepath_lr_xmp)
+
+    #check new xmp
+    error=0
+    if not filepath_lr_xmp.exists():
+        logger.error(f"XMP file does not exist: {xmp_path}")
+        error=1
+    else:
+        with pyexiv2.Image(filepath_lr_xmp.as_posix()) as new_lr_xmp:
+            xmp_data=new_lr_xmp.read_xmp()
+            orientation=xmp_data.get("Xmp.tiff.Orientation","0")
+            mirrored= orientation in ["2","5","7","4"]
+            if orientation=="0":
+                error=1
+                logger.error(f"XMP file has invalid rotation: {filepath_lr_xmp}")
+            elif mirror and not mirrored:
+                error=1
+                logger.error(f"XMP file not mirrored when it should be: {filepath_lr_xmp}")
+            elif not mirror and mirrored:
+                error=1
+                logger.error(f"XMP file mirrored when it should NOT be: {filepath_lr_xmp}")
+
+            if error:
+                logger.error(f"XMP expected {xmp_param['Xmp.tiff.Orientation']} but got {orientation} : {filepath_lr_xmp}")
+            
 
     tempdir.cleanup()
 
@@ -277,30 +304,30 @@ def main():
         # do not include files in debug directory
         files = [x for x in files if not x.is_relative_to(debug_path)]
 
-    with ExifTool() as et:
-        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-            future_to_path = {}
-            for filepath in files:
-                future = executor.submit(
-                    process_file,
-                    filepath=filepath,
-                    debug_path=debug_path,
-                    debug=debug,
-                    crop_addition=crop_addition,
-                    blur_radius=blur_radius,
-                    et=et,
-                )
-                future_to_path[future] = filepath.as_posix()
 
-            for future in concurrent.futures.as_completed(future_to_path):
-                filepath = future_to_path[future]
-                try:
-                    data = future.result()
-                except BaseException as e:
-                    logger.error(f"Failed to process: {filepath}")
-                    logger.error(f"Exception: {e}")
-                else:
-                    logger.info(f"Completed: {filepath}")
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+        future_to_path = {}
+        for filepath in files:
+            future = executor.submit(
+                process_file,
+                filepath=filepath,
+                debug_path=debug_path,
+                debug=debug,
+                crop_addition=crop_addition,
+                blur_radius=blur_radius,
+                mirror=mirror_config,
+            )
+            future_to_path[future] = filepath.as_posix()
+
+        for future in concurrent.futures.as_completed(future_to_path):
+            filepath = future_to_path[future]
+            try:
+                data = future.result()
+            except BaseException as e:
+                logger.error(f"Failed to process: {filepath}")
+                logger.error(f"Exception: {e}")
+            else:
+                logger.info(f"Completed: {filepath}")
 
 
 if __name__ == "__main__":
