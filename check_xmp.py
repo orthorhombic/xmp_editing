@@ -44,7 +44,8 @@ def check_dt_xmp_file(image_path):
     xmp_path = image_path.with_suffix(f"{image_path.suffix}.xmp")
     error=0
     if not xmp_path.exists():
-        logger.debug(f"XMP file does not exist: {xmp_path}")
+        logger.error(f"XMP file does not exist: {xmp_path}")
+        error=1
     else:
         with pyexiv2.Image(xmp_path.as_posix()) as img:
             xmp_data=img.read_xmp()

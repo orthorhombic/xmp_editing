@@ -266,7 +266,7 @@ def process_file(
     #check new xmp
     error=0
     if not filepath_lr_xmp.exists():
-        logger.error(f"XMP file does not exist: {xmp_path}")
+        logger.error(f"XMP file does not exist: {filepath_lr_xmp}")
         error=1
     else:
         with pyexiv2.Image(filepath_lr_xmp.as_posix()) as new_lr_xmp:
