@@ -69,7 +69,7 @@ if config_data.get("raw_crop") is not None:
 else:
     raw_crop = False
 
-mirror_config = config_data.get("mirror",False) # default to not mirroring
+mirror_config = config_data.get("mirror", False)  # default to not mirroring
 
 if debug:
     debug_path = pathlib.Path(root_path, "debug")
@@ -78,19 +78,20 @@ else:
     debug_path = None
 
 # create a mapping from "normal" rotation to horizontally mirrored counterpart
-mirror_map={
-    "1":"2", 
-    "6":"5",
-    "8":"7",
-    "3":"4",
+mirror_map = {
+    "1": "2",
+    "6": "5",
+    "8": "7",
+    "3": "4",
 }
 # mapping to switch from mirrored to standard
-mirror_map_invert={
-    "2":"1", 
-    "5":"6",
-    "7":"8",
-    "4":"3",
+mirror_map_invert = {
+    "2": "1",
+    "5": "6",
+    "7": "8",
+    "4": "3",
 }
+
 
 def shrink_image(im, max_size=800):
     w, h = im.size
@@ -113,7 +114,7 @@ def process_file(
     mirror: bool,
 ):
     suffix = filepath.suffix.upper()
-    rawfile=False
+    rawfile = False
     if suffix in xmp_editing_utils.raw_files:
         if suffix == ".CR3":
             with rawpy.imread(filepath.as_posix()) as raw:
@@ -130,11 +131,11 @@ def process_file(
         else:
             with rawpy.imread(filepath.as_posix()) as raw:
                 imcv2 = raw.postprocess(half_size=True)
-        rawfile=True
+        rawfile = True
         img = Image.fromarray(imcv2)
         if raw_crop:
-            #convert to half size:
-            raw_crop_half=tuple([x/2 for x in raw_crop])
+            # convert to half size:
+            raw_crop_half = tuple([x / 2 for x in raw_crop])
             img = img.crop(raw_crop_half)
         # convert from cv2 image file to pil image file
     elif filepath.suffix.upper() in xmp_editing_utils.other_files:
@@ -205,7 +206,9 @@ def process_file(
         xmp_param["Xmp.crs.CropAngle"] = 0
 
         if debug:
-            logger.debug(f"{filepath.name} bbox: left {bbox[0]} top  {bbox[1]} right  {bbox[2]} bottom  {bbox[3]}, w: {w} h: {h}")
+            logger.debug(
+                f"{filepath.name} bbox: left {bbox[0]} top  {bbox[1]} right  {bbox[2]} bottom  {bbox[3]}, w: {w} h: {h}"
+            )
             im = xmp_editing_utils.draw_cropline(original_img, new_box)
 
             im = shrink_image(im, max_size=800)
@@ -217,8 +220,8 @@ def process_file(
         raise RuntimeError("Could not find a bounding box for crop")
 
     if rawfile:
-        xmp_param["Xmp.tiff.ImageWidth"] = w*2
-        xmp_param["Xmp.tiff.ImageLength"] = h*2
+        xmp_param["Xmp.tiff.ImageWidth"] = w * 2
+        xmp_param["Xmp.tiff.ImageLength"] = h * 2
     else:
         xmp_param["Xmp.tiff.ImageWidth"] = w
         xmp_param["Xmp.tiff.ImageLength"] = h
@@ -226,7 +229,7 @@ def process_file(
     if filepath.suffix.upper() == ".DNG":
         xmp_param["Xmp.crs.Exposure2012"] = -0.01
 
-    tempdir = tempfile.TemporaryDirectory(suffix=filepath.stem,dir="/dev/shm")
+    tempdir = tempfile.TemporaryDirectory(suffix=filepath.stem, dir="/dev/shm")
     temp_dir_path = pathlib.Path(tempdir.name)
     # logger.debug(f"Using temp directory {temp_dir_path} for {filepath.name}")
 
@@ -245,53 +248,61 @@ def process_file(
         orig_data = img.read_xmp()
 
         # Override mirror parameter with "no_mirror" tag
-        if "no_mirror" in orig_data.get("Xmp.dc.subject",list()):
+        if "no_mirror" in orig_data.get("Xmp.dc.subject", list()):
             mirror = False
 
-        #check if orientation tag exists. if not, set to 1
-        xmp_param["Xmp.tiff.Orientation"]=orig_data.get("Xmp.tiff.Orientation","1")
+        # check if orientation tag exists. if not, set to 1
+        xmp_param["Xmp.tiff.Orientation"] = orig_data.get("Xmp.tiff.Orientation", "1")
 
-        mirrored= xmp_param["Xmp.tiff.Orientation"] in ["2","5","7","4"]
+        mirrored = xmp_param["Xmp.tiff.Orientation"] in ["2", "5", "7", "4"]
         # update orientation if mirror parameter is set and not already mirrored
         if mirror and not mirrored:
-            xmp_param["Xmp.tiff.Orientation"] = mirror_map[xmp_param["Xmp.tiff.Orientation"]]
+            xmp_param["Xmp.tiff.Orientation"] = mirror_map[
+                xmp_param["Xmp.tiff.Orientation"]
+            ]
         elif not mirror and mirrored:
-            xmp_param["Xmp.tiff.Orientation"] = mirror_map_invert[xmp_param["Xmp.tiff.Orientation"]]
-        
+            xmp_param["Xmp.tiff.Orientation"] = mirror_map_invert[
+                xmp_param["Xmp.tiff.Orientation"]
+            ]
+
         img.modify_xmp(xmp_param)
         img.read_xmp()
 
     copy2(temp_xmp_path, filepath_lr_xmp)
 
-    #check new xmp
-    error=0
+    # check new xmp
+    error = 0
     if not filepath_lr_xmp.exists():
         logger.error(f"XMP file does not exist: {filepath_lr_xmp}")
-        error=1
+        error = 1
     else:
         with pyexiv2.Image(filepath_lr_xmp.as_posix()) as new_lr_xmp:
-            xmp_data=new_lr_xmp.read_xmp()
-            orientation=xmp_data.get("Xmp.tiff.Orientation","0")
-            mirrored= orientation in ["2","5","7","4"]
-            if orientation=="0":
-                error=1
+            xmp_data = new_lr_xmp.read_xmp()
+            orientation = xmp_data.get("Xmp.tiff.Orientation", "0")
+            mirrored = orientation in ["2", "5", "7", "4"]
+            if orientation == "0":
+                error = 1
                 logger.error(f"XMP file has invalid rotation: {filepath_lr_xmp}")
             elif mirror and not mirrored:
-                error=1
-                logger.error(f"XMP file not mirrored when it should be: {filepath_lr_xmp}")
+                error = 1
+                logger.error(
+                    f"XMP file not mirrored when it should be: {filepath_lr_xmp}"
+                )
             elif not mirror and mirrored:
-                error=1
-                logger.error(f"XMP file mirrored when it should NOT be: {filepath_lr_xmp}")
+                error = 1
+                logger.error(
+                    f"XMP file mirrored when it should NOT be: {filepath_lr_xmp}"
+                )
 
             if error:
-                logger.error(f"XMP expected {xmp_param['Xmp.tiff.Orientation']} but got {orientation} : {filepath_lr_xmp}")
-            
+                logger.error(
+                    f"XMP expected {xmp_param['Xmp.tiff.Orientation']} but got {orientation} : {filepath_lr_xmp}"
+                )
 
     tempdir.cleanup()
 
 
 def main():
-
     p = root_path.rglob("*")
     files = [x for x in p if x.is_file()]
 
@@ -303,7 +314,6 @@ def main():
     if debug:
         # do not include files in debug directory
         files = [x for x in files if not x.is_relative_to(debug_path)]
-
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
         future_to_path = {}

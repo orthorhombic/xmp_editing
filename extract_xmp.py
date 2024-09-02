@@ -83,7 +83,6 @@ cnx.close()
 
 
 def reprocess_tuples(xmp_dict: dict) -> None:
-
     keys_of_interest = {
         "Xmp.crs.ToneCurvePV2012",
         "Xmp.crs.ToneCurve",
@@ -255,7 +254,6 @@ def crop_fields_from_missing(missing_fields: dict):
 
 
 def process_file(data_series, et, update_file: bool = True):
-
     path_from_root = data_series.loc["PathFromRoot"]
     temp_path = data_series.loc["BaseName"] + "." + data_series.loc["FileType"]
     lr_xmp_path = data_series.loc["BaseName"] + ".xmp"
@@ -369,7 +367,6 @@ def process_file(data_series, et, update_file: bool = True):
 
             logger.debug(f"updated {filepath_lr_xmp}")
         else:
-
             check_drop_modify(
                 file_to_modify=temp_files["orig"], xmp_to_clean=combined_xmp
             )

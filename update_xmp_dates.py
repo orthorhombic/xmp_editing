@@ -20,7 +20,7 @@ logzero.logfile("update_xmp_logfile.log", maxBytes=1e8, backupCount=3)
 # - Only update date fields if they already exist.
 # - Throw an error if there is a date field not already in the list of update fields or exempt fields.
 
-# TODO: find all image files and add an xmp if it doesn't exist
+# TODO: find all image files and add an xmp if it doesn't exist (not necessary if run after cropping because that creates an xmp file for every image)
 
 DATE_FIELDS = [
     "Xmp.tiff.DateTime",
