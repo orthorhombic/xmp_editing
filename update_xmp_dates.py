@@ -102,6 +102,9 @@ def update_xmp_date(file: Path, date: tuple, dry_run: bool):
         metadata_update[key] = new_date_string
     # make sure datetime original is set no matter what (may set it twice)
     metadata_update["Xmp.exif.DateTimeOriginal"] = new_date_string
+    metadata_update["Xmp.xmp.MetadataDate"] = new_date_string
+    metadata_update["Xmp.xmp.CreateDate"] = new_date_string
+    metadata_update["Xmp.xmp.ModifyDate"] = new_date_string
 
     logger.info(f"Before: {time}, After: {new_date_string}")
 
