@@ -2,6 +2,18 @@
 
 Initially focused on the migration of Lightroom database info into Darktable
 
+## Workflow for processing scanned photos
+
+1. Load files into digikam
+   1. Rotate, using the function to update exif tags.
+   2. Add captions or tags like "no_mirror"
+2. Apply crop with `python generate_crop_xmp.py`
+3. Run import with darktable 4.8.0. Make sure thumbnails are set to small so it uses jpeg thumbnails and does not start processing. Enter darktable mode and look for the text to pop up that the crop has been applied. Iterate through each file by using `space` to move forward in the list of pictures. Use [input-remapper](https://github.com/sezanzeb/input-remapper) as a method to automate this process. A pause of 0.6 seconds seems to be sufficient for the image crop to process.
+   1. Inspect files for any scanning defects
+4. Using digikam, move files into folders organized by date (e.g 1970/12/31)
+5. Update the xmp dates with `python update_xmp_dates.py `
+6. Remove any extra files (e.g. crop debug) and back up to server
+
 ## Migration of xmp data
 
 Loading order (inverse priority):
