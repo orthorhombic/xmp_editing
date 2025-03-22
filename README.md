@@ -2,6 +2,70 @@
 
 Initially focused on the migration of Lightroom database info into Darktable
 
+## Scanning Images
+
+### Command line examples for scanimage using fi-8170 scanner
+
+Overscan:
+```bash
+scanimage \
+--format=tiff \
+--batch=FamilyName-%05d.tiff \
+--batch-start=15 \
+--progress \
+--page-auto=no \
+--paper-size=Custom \
+--page-width=102 \
+--page-height=155 \
+--source=Adf-front \
+--mode=Color \
+--resolution=600 \
+--bgcolor=Black \
+--tone-adjustment=Custom \
+--cropping=Overscan \
+--brightness=0 \
+--contrast=0 \
+--shadow=0 \
+--highlight=255 \
+--gamma=1 \
+--autofeed=yes \
+--multifeed-detection=Stop \
+--cleanup-sharpness=None \
+--prepick=no \
+--jpeg=no \
+--get-sc-status=0x00000000 \
+--get-sc-error=0x03800320
+```
+
+Auto paper size and crop:
+```bash
+scanimage \
+--format=tiff \
+--batch=FamilyName-%05d.tiff \
+--batch-start=15 \
+--progress \
+--page-auto=yes \
+--page-auto-priority=Accuracy \
+--source=Adf-front \
+--mode=Color \
+--resolution=600 \
+--bgcolor=Black \
+--tone-adjustment=Custom \
+--cropping=Old_specification \
+--brightness=0 \
+--contrast=0 \
+--shadow=0 \
+--highlight=255 \
+--gamma=1 \
+--autofeed=yes \
+--multifeed-detection=Stop \
+--cleanup-sharpness=None \
+--prepick=no \
+--jpeg=no \
+--get-sc-status=0x00000000 \
+--get-sc-error=0x03800320
+```
+
 ## Workflow for processing scanned photos
 
 1. Load files into digikam
