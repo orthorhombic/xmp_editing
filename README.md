@@ -6,12 +6,23 @@ Initially focused on the migration of Lightroom database info into Darktable
 
 ### Command line examples for scanimage using fi-8170 scanner
 
+
+Find next starting number:
+```bash
+max_number=$(ls | grep -oP '.*-\K\d+(?=\.tiff)' | sort -n | tail -1 | bc)
+next_number=$((max_number + 1))
+echo "The maximum number is: $next_number"
+```
+
 Overscan:
 ```bash
-scanimage \
+ max_number=$(ls | grep -oP '.*-\K\d+(?=\.tiff)' | sort -n | tail -1 | bc)
+ next_number=$((max_number + 1))
+ echo "The next number is: $next_number"
+ scanimage \
 --format=tiff \
 --batch=FamilyName-%05d.tiff \
---batch-start=15 \
+--batch-start=$next_number \
 --progress \
 --page-auto=no \
 --paper-size=Custom \
@@ -37,12 +48,54 @@ scanimage \
 --get-sc-error=0x03800320
 ```
 
-Auto paper size and crop:
+Reduced Overscan:
 ```bash
-scanimage \
+ max_number=$(ls | grep -oP '.*-\K\d+(?=\.tiff)' | sort -n | tail -1 | bc)
+ next_number=$((max_number + 1))
+ echo "The next number is: $next_number"
+ width=100
+ height=155
+ adjusted_width=$((width - 24))
+ adjusted_height=$((height - 12))
+
+ scanimage \
 --format=tiff \
 --batch=FamilyName-%05d.tiff \
---batch-start=15 \
+--batch-start=$next_number \
+--progress \
+--page-auto=no \
+--paper-size=Custom \
+--page-width=$adjusted_width \
+--page-height=$adjusted_height \
+--source=Adf-front \
+--mode=Color \
+--resolution=600 \
+--bgcolor=Black \
+--tone-adjustment=Custom \
+--cropping=Overscan \
+--brightness=0 \
+--contrast=0 \
+--shadow=0 \
+--highlight=255 \
+--gamma=1 \
+--autofeed=yes \
+--multifeed-detection=Stop \
+--cleanup-sharpness=None \
+--prepick=no \
+--jpeg=no \
+--get-sc-status=0x00000000 \
+--get-sc-error=0x03800320
+```
+
+Auto paper size and crop:
+```bash
+ max_number=$(ls | grep -oP '.*-\K\d+(?=\.tiff)' | sort -n | tail -1 | bc)
+ next_number=$((max_number + 1))
+ echo "The next number is: $next_number"
+ scanimage \
+--format=tiff \
+--batch=FamilyName-%05d.tiff \
+--batch-start=$next_number \
 --progress \
 --page-auto=yes \
 --page-auto-priority=Accuracy \
