@@ -4,6 +4,36 @@ Initially focused on the migration of Lightroom database info into Darktable
 
 ## Scanning Images
 
+Find scanners with `scanimage -L`
+
+### Command line examples for scanimage using epson scanner
+
+```bash
+ max_number=$(ls | grep -oP '.*-\K\d+(?=\.tiff)' | sort -n | tail -1 | bc)
+ next_number=$((max_number + 1))
+ echo "The next number is: $next_number"
+ width=70
+ height=30
+ adjusted_width=$((width + 10))
+ adjusted_height=$((height + 10))
+ time scanimage \
+ -d epson2:libusb:001:061 \
+--format=tiff \
+--batch=FamilyName-%05d.tiff \
+--batch-count=1 \
+--batch-start=$next_number \
+--progress \
+--mode Color \
+--depth 16 \
+--resolution=1200 \
+--color-correction None \
+--source Flatbed \
+-l 0 \
+-t 0 \
+-x $adjusted_width \
+-y $adjusted_height 
+```
+
 ### Command line examples for scanimage using fi-8170 scanner
 
 
@@ -20,6 +50,7 @@ Overscan:
  next_number=$((max_number + 1))
  echo "The next number is: $next_number"
  scanimage \
+ -d pfufs:fi-8170:002:001 \
 --format=tiff \
 --batch=FamilyName-%05d.tiff \
 --batch-start=$next_number \
@@ -59,6 +90,7 @@ Reduced Overscan:
  adjusted_height=$((height - 12))
 
  scanimage \
+ -d pfufs:fi-8170:002:001 \
 --format=tiff \
 --batch=FamilyName-%05d.tiff \
 --batch-start=$next_number \
@@ -93,12 +125,13 @@ Auto paper size and crop:
  next_number=$((max_number + 1))
  echo "The next number is: $next_number"
  scanimage \
+ -d pfufs:fi-8170:002:001 \
 --format=tiff \
 --batch=FamilyName-%05d.tiff \
 --batch-start=$next_number \
 --progress \
 --page-auto=yes \
---page-auto-priority=Accuracy \
+--page-auto-priority=Speed \
 --source=Adf-front \
 --mode=Color \
 --resolution=600 \
