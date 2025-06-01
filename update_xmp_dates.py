@@ -52,12 +52,15 @@ def find_xmp_files(directory: Path) -> list[str]:
 
 
 def get_date_from_path(file: Path):
-    match = re.search(r"(\d{4})/(\d{2})(?:/(\d{2}))?", file.as_posix())
+    # match = re.search(r"(\d{4})/(\d{2})(?:/(\d{2}))?", file.as_posix()) # requires 2-3
+    match = re.search(
+        r"(?:/)(\d{4})(?:/(\d{2})(?:/(\d{2}))?)?", file.as_posix()
+    )  # requires 1-3
     if match:
         year = int(match.group(1))
-        month = int(match.group(2))
+        month = int(match.group(2)) if match.group(2) else 1
         day = int(match.group(3)) if match.group(3) else 1
-        logger.debug(f"{year},{month},{day},{file}")
+        logger.info(f"{year},{month},{day},{file}")
         return year, month, day
     return None
 
@@ -65,12 +68,13 @@ def get_date_from_path(file: Path):
 def update_xmp_date(file: Path, date: tuple, dry_run: bool):
     with pyexiv2.Image(file.as_posix()) as xmp_file:
         xmp_data = xmp_file.read_xmp()
+    parsed_time = None
 
     # get all date fields:
     date_fields = []
     for key, val in xmp_data.items():
         if key.lower().find("date") != -1:
-            logger.info(f"{key}, {val}")
+            logger.debug(f"{key}, {val}")
             date_fields.append(key)
     # check for unexpected keys:
     if not set(EXPECTED_FIELDS).issuperset(set(date_fields)):
@@ -80,20 +84,30 @@ def update_xmp_date(file: Path, date: tuple, dry_run: bool):
 
     time = xmp_data.get("Xmp.exif.DateTimeOriginal")
     if not time:
-        cr3_path = Path(file).parent / f"{Path(file).name.split('.')[0]}.CR3"
+        image_path_list = list(
+            Path(file).parent.glob(f"{Path(file).name.split('.')[0]}.*[!xmp]")
+        )
+        if len(image_path_list) > 1:
+            logger.warning(f"There are multiple images files corresponding to {file}")
 
-        # open CR3 to get data from there
-        with pyexiv2.Image(cr3_path.as_posix()) as cr3_file:
-            cr3_data = cr3_file.read_exif()
-        time = cr3_data.get("Exif.Photo.DateTimeOriginal")
+        image_path = image_path_list[0]
 
-    try:
-        parsed_time = datetime.datetime.fromisoformat(time)
-    except ValueError:
-        if len(time) > 19:
-            parsed_time = datetime.datetime.strptime(time, "%Y:%m:%d %H:%M:%S.%f")
-        else:
-            parsed_time = datetime.datetime.strptime(time, "%Y:%m:%d %H:%M:%S")
+        # open image file to get data from there
+        with pyexiv2.Image(image_path.as_posix()) as image_file:
+            image_data = image_file.read_exif()
+        time = image_data.get("Exif.Photo.DateTimeOriginal")
+        if not time:
+            # fall back to file data
+            epoch = os.path.getctime(image_path)
+            parsed_time = datetime.datetime.fromtimestamp(epoch)
+    if not parsed_time:
+        try:
+            parsed_time = datetime.datetime.fromisoformat(time)
+        except ValueError:
+            if len(time) > 19:
+                parsed_time = datetime.datetime.strptime(time, "%Y:%m:%d %H:%M:%S.%f")
+            else:
+                parsed_time = datetime.datetime.strptime(time, "%Y:%m:%d %H:%M:%S")
 
     new_date_string = combine_date_and_time(date, parsed_time)
     metadata_update = {}
